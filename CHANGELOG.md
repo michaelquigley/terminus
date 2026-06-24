@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+CHANGE: `terminus review` now promotes a defaulted working-tree review to a full
+review when the working tree is clean, announcing `working tree clean; reviewing
+full tracked repo`. A bare `terminus review` on a committed repo previously
+selected nothing and returned a vacuous `clean`; it now reviews the project. An
+explicit `--kind working-tree` is always honored, and the MCP `start_review`
+contract is unchanged.
+
 FEATURE: Add Mercurius-style CI build integration using the shared `push`
 framework. The workflow now vets, tests, builds a stamped linux-amd64 binary
 with `push/ci/ldflags.sh`, verifies `terminus version` is stamped, uploads an

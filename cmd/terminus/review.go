@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -24,6 +25,21 @@ func newReviewCommand(configPath *string, verbose *bool) *cobra.Command {
 			req, err := reviewRequest(repoPath, kind, args)
 			if err != nil {
 				return err
+			}
+			// when --kind was left at its default and the working tree is clean,
+			// a working-tree review would select nothing and report a vacuous
+			// clean verdict. promote to a full review so a bare `terminus review`
+			// on a committed repo reviews the project instead of nothing. an
+			// explicit --kind is always honored.
+			if !cmd.Flags().Changed("kind") && req.ChangesetKind == changeset.KindWorkingTree {
+				empty, err := workingTreeEmpty(cmd.Context(), req.RepoPath)
+				if err != nil {
+					return err
+				}
+				if empty {
+					req.ChangesetKind = changeset.KindFull
+					fmt.Fprintln(cmd.OutOrStdout(), "working tree clean; reviewing full tracked repo (--kind full)")
+				}
 			}
 			return runReview(cmd, *configPath, *verbose, req)
 		},
@@ -59,6 +75,18 @@ func reviewRequest(repoPath string, kind string, args []string) (broker.StartRev
 		ChangesetKind: kind,
 		Paths:         append([]string(nil), args...),
 	}, nil
+}
+
+// workingTreeEmpty reports whether the repo has no uncommitted changes. it
+// reuses changeset.WorkingTree so the CLI's notion of "clean" stays byte-for-byte
+// the dirty set the broker would otherwise review, rather than a parallel check
+// that could drift from it.
+func workingTreeEmpty(ctx context.Context, repoPath string) (bool, error) {
+	cs, err := changeset.WorkingTree(ctx, repoPath)
+	if err != nil {
+		return false, err
+	}
+	return len(cs.Files) == 0, nil
 }
 
 func runReview(cmd *cobra.Command, configPath string, verbose bool, req broker.StartReviewRequest) error {

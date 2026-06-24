@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/michaelquigley/terminus/internal/changeset"
+	"github.com/michaelquigley/terminus/internal/monitor"
 )
 
 func TestReviewRequestValidation(t *testing.T) {
@@ -81,6 +82,96 @@ reviewer:
 			t.Fatalf("expected %s: %v", name, err)
 		}
 	}
+}
+
+func TestReviewCleanTreePromotesToFull(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	// no uncommitted changes: the working tree is clean
+
+	configPath, logDir := promoteFixtureConfig(t, repo)
+
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--config", configPath, "review", "--repo", repo})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("review command failed: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "working tree clean; reviewing full tracked repo") {
+		t.Fatalf("expected promotion notice in output:\n%s", out.String())
+	}
+
+	status := readSingleStatus(t, logDir, filepath.Base(repo))
+	if status.ChangesetKind != changeset.KindFull {
+		t.Fatalf("expected promoted changeset kind full, got %q", status.ChangesetKind)
+	}
+	if len(status.Qualities) == 0 {
+		t.Fatal("expected promoted full review to select qualities, got none")
+	}
+}
+
+func TestReviewExplicitWorkingTreeNotPromoted(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	// clean tree, but --kind is explicit and must be honored
+
+	configPath, logDir := promoteFixtureConfig(t, repo)
+
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--config", configPath, "review", "--repo", repo, "--kind", "working-tree"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("review command failed: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "working tree clean; reviewing full tracked repo") {
+		t.Fatalf("explicit --kind working-tree should not be promoted:\n%s", out.String())
+	}
+
+	status := readSingleStatus(t, logDir, filepath.Base(repo))
+	if status.ChangesetKind != changeset.KindWorkingTree {
+		t.Fatalf("expected changeset kind working-tree, got %q", status.ChangesetKind)
+	}
+}
+
+// promoteFixtureConfig writes a dummy-reviewer config and returns its path along
+// with the log destination, so the status helper can locate the written run.
+func promoteFixtureConfig(t *testing.T, repo string) (configPath string, logDir string) {
+	t.Helper()
+	canonRoot := fixtureCanon(t, filepath.Base(repo))
+	logDir = t.TempDir()
+	configPath = filepath.Join(t.TempDir(), "terminus.yaml")
+	writeFile(t, configPath, fmt.Sprintf(`canon_path: %q
+log_destination: %q
+reviewer:
+  name: dummy
+  impl: dummy
+`, canonRoot, logDir))
+	return configPath, logDir
+}
+
+func readSingleStatus(t *testing.T, logDir string, project string) monitor.ReviewStatus {
+	t.Helper()
+	projectDir := filepath.Join(logDir, project)
+	runs, err := os.ReadDir(projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("expected one review run, got %d", len(runs))
+	}
+	status, err := monitor.ReadStatus(monitor.StatusPath(filepath.Join(projectDir, runs[0].Name())))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return status
 }
 
 func fixtureCanon(t *testing.T, project string) string {

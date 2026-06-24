@@ -94,6 +94,8 @@ terminus review --kind paths internal/canon cmd/terminus
 
 `--repo` defaults to `.`, `--kind` defaults to `working-tree`, and path arguments are only valid with `--kind paths`. The command writes the same review artifacts as MCP review startup, waits for the reviewer to finish, then prints the verdict, finding counts, prompt path, findings log path, and a compact finding list. A `not_clean` result is still a successful command execution; process failure is reserved for operational errors.
 
+When `--kind` is left at its default and the working tree is clean, the command promotes the review to `full` and prints `working tree clean; reviewing full tracked repo`. This keeps a bare `terminus review` on a committed repo from selecting nothing and reporting a vacuous `clean`. An explicit `--kind working-tree` is always honored, even on a clean tree. The promotion is CLI-only; the MCP `start_review` tool reviews exactly the `changeset_kind` it is given.
+
 ## MCP Surface
 
 `start_review` takes `repo_path`, `changeset_kind` (`working-tree`, `paths`, or `full`), and optional `paths`. It resolves the project rubric, narrows the qualities, writes `_prompt.md`, starts the reviewer in the background, and returns a `review_id` plus a monitor command.
