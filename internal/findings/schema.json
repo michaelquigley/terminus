@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://terminus.local/schemas/findings.schema.json",
+  "title": "Terminus findings",
+  "description": "structured findings returned by a Terminus code reviewer; flat findings array items only",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "findings"
+  ],
+  "properties": {
+    "summary": {
+      "description": "one-paragraph high-level read of the changes under review",
+      "type": "string"
+    },
+    "findings": {
+      "description": "individual review findings",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "quality",
+          "file",
+          "lines",
+          "claim",
+          "rationale",
+          "suggestion"
+        ],
+        "properties": {
+          "id": {
+            "description": "stable identifier for this finding within this review",
+            "type": "string"
+          },
+          "quality": {
+            "description": "the selected quality id this finding is attributed to",
+            "type": "string"
+          },
+          "file": {
+            "description": "repo-relative file path the finding concerns, or N/A when no concrete file applies",
+            "type": "string"
+          },
+          "lines": {
+            "description": "line or range within the file, or N/A",
+            "type": "string"
+          },
+          "claim": {
+            "description": "what is wrong or missing",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "why the claim matters",
+            "type": "string"
+          },
+          "suggestion": {
+            "description": "nullable concrete fix; use null when there is no suggestion",
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

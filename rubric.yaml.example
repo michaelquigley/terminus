@@ -1,0 +1,14 @@
+project:
+  name: terminus
+  repo: terminus
+  description: code review broker
+  characteristics:
+    - go project
+    - MCP server
+    - uses the df toolkit
+
+qualities:
+  - ref: go-conventions/df-logging
+    blocking: true
+  - ref: go-conventions/truthful-naming
+    blocking: false

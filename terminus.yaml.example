@@ -1,0 +1,9 @@
+canon_path: ../terminus-canon
+log_destination: ~/.local/share/terminus
+
+reviewer:
+  name: pi
+  impl: pi
+  # model: gpt-5
+  # binary_path: pi
+  # extra_args: []
