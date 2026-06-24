@@ -26,6 +26,7 @@ type StartReviewRequest struct {
 	RepoPath      string
 	ChangesetKind string
 	Paths         []string
+	Rubric        string
 }
 
 type StartReviewResponse struct {
@@ -51,6 +52,7 @@ type ListReviewsResponse struct {
 type ReviewSummary struct {
 	ReviewID      string `json:"review_id"`
 	Project       string `json:"project"`
+	Rubric        string `json:"rubric,omitempty"`
 	State         string `json:"state"`
 	ChangesetKind string `json:"changeset_kind"`
 	StartedAt     string `json:"started_at"`
@@ -62,6 +64,7 @@ type ReviewSummary struct {
 type CollectReviewResponse struct {
 	ReviewID     string                `json:"review_id"`
 	Project      string                `json:"project"`
+	Rubric       string                `json:"rubric,omitempty"`
 	State        string                `json:"state"`
 	Verdict      string                `json:"verdict"`
 	Clean        bool                  `json:"clean"`
@@ -89,6 +92,7 @@ type TriageFindingOutput struct {
 type reviewResultFile struct {
 	ReviewID     string                `json:"review_id"`
 	Project      string                `json:"project"`
+	Rubric       string                `json:"rubric,omitempty"`
 	State        string                `json:"state"`
 	Verdict      string                `json:"verdict"`
 	Clean        bool                  `json:"clean"`

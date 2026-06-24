@@ -10,11 +10,10 @@ import (
 )
 
 type Head struct {
-	ID         string         `dd:"id,+required"`
-	AppliesTo  []string       `dd:"applies_to"`
-	Territory  []string       `dd:"territory"`
-	Convention string         `dd:"convention"`
-	Extra      map[string]any `dd:",+extra"`
+	ID        string         `dd:"id,+required"`
+	AppliesTo []string       `dd:"applies_to"`
+	Territory []string       `dd:"territory"`
+	Extra     map[string]any `dd:",+extra"`
 }
 
 type Quality struct {

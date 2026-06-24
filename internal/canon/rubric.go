@@ -4,10 +4,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/michaelquigley/df/dd"
 )
+
+// DefaultRubric is the rubric name used when a caller does not request one.
+const DefaultRubric = "rubric"
 
 type ProjectInfo struct {
 	Name            string         `dd:"name"`
@@ -29,25 +33,29 @@ type Rubric struct {
 	Extra     map[string]any `dd:",+extra"`
 }
 
-func LoadRubric(store *Store, project string) (Rubric, error) {
+func LoadRubric(store *Store, project string, rubric string) (Rubric, error) {
 	project = strings.TrimSpace(project)
 	if project == "" {
 		return Rubric{}, fmt.Errorf("project is required")
 	}
-	path := filepath.Join(store.root, "projects", project, "rubric.yaml")
+	fileName, err := rubricFileName(rubric)
+	if err != nil {
+		return Rubric{}, err
+	}
+	path := filepath.Join(store.root, "projects", project, fileName)
 	if err := ensureContained(store.root, path); err != nil {
 		return Rubric{}, err
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return Rubric{}, fmt.Errorf("load rubric %q: %w", project, err)
+		return Rubric{}, fmt.Errorf("load rubric %q for project %q: %w", strings.TrimSuffix(fileName, ".yaml"), project, err)
 	}
 	return ParseRubric(raw)
 }
 
-func LoadProjectRubric(store *Store, repoPath string) (Rubric, string, error) {
+func LoadProjectRubric(store *Store, repoPath string, rubric string) (Rubric, string, error) {
 	project := ProjectIdentity(repoPath)
-	r, err := LoadRubric(store, project)
+	r, err := LoadRubric(store, project, rubric)
 	if err != nil {
 		return Rubric{}, project, err
 	}
@@ -55,6 +63,48 @@ func LoadProjectRubric(store *Store, repoPath string) (Rubric, string, error) {
 		return Rubric{}, project, fmt.Errorf("rubric project.repo mismatch for %q: expected %q, found %q", repoPath, project, r.Project.Repo)
 	}
 	return r, project, nil
+}
+
+// ListRubrics returns the rubric names available for a project, derived from the
+// `*.yaml` files under `projects/<project>/`, sorted and without the extension.
+func ListRubrics(store *Store, project string) ([]string, error) {
+	project = strings.TrimSpace(project)
+	if project == "" {
+		return nil, fmt.Errorf("project is required")
+	}
+	dir := filepath.Join(store.root, "projects", project)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("list rubrics for project %q: %w", project, err)
+	}
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".yaml") {
+			continue
+		}
+		names = append(names, strings.TrimSuffix(name, ".yaml"))
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// rubricFileName normalizes a requested rubric name to a single-segment file
+// name. An empty request resolves to the default rubric; names that escape the
+// project directory are rejected.
+func rubricFileName(rubric string) (string, error) {
+	rubric = strings.TrimSpace(rubric)
+	if rubric == "" {
+		rubric = DefaultRubric
+	}
+	rubric = strings.TrimSuffix(rubric, ".yaml")
+	if rubric == "" || strings.ContainsAny(rubric, `/\`) || strings.Contains(rubric, "..") {
+		return "", fmt.Errorf("invalid rubric name %q", rubric)
+	}
+	return rubric + ".yaml", nil
 }
 
 func ParseRubric(raw []byte) (Rubric, error) {

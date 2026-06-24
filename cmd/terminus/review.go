@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/michaelquigley/terminus/internal/broker"
+	"github.com/michaelquigley/terminus/internal/canon"
 	"github.com/michaelquigley/terminus/internal/changeset"
 	"github.com/michaelquigley/terminus/internal/config"
 	"github.com/michaelquigley/terminus/internal/wiring"
@@ -16,6 +17,7 @@ import (
 func newReviewCommand(configPath *string, verbose *bool) *cobra.Command {
 	var repoPath string
 	var kind string
+	var rubric string
 
 	cmd := &cobra.Command{
 		Use:          "review [paths...]",
@@ -26,6 +28,7 @@ func newReviewCommand(configPath *string, verbose *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			req.Rubric = rubric
 			// when --kind was left at its default and the working tree is clean,
 			// a working-tree review would select nothing and report a vacuous
 			// clean verdict. promote to a full review so a bare `terminus review`
@@ -46,6 +49,7 @@ func newReviewCommand(configPath *string, verbose *bool) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&repoPath, "repo", ".", "repo path to review")
 	cmd.Flags().StringVar(&kind, "kind", changeset.KindWorkingTree, "changeset kind: working-tree, paths, or full")
+	cmd.Flags().StringVar(&rubric, "rubric", canon.DefaultRubric, "rubric name to select qualities from the canon")
 	return cmd
 }
 
@@ -118,6 +122,9 @@ func printReviewResult(cmd *cobra.Command, result broker.CollectReviewResponse) 
 
 	fmt.Fprintf(out, "review '%s' completed\n", result.ReviewID)
 	fmt.Fprintf(out, "project: %s\n", result.Project)
+	if result.Rubric != "" {
+		fmt.Fprintf(out, "rubric: %s\n", result.Rubric)
+	}
 	fmt.Fprintf(out, "verdict: %s\n", result.Verdict)
 	fmt.Fprintf(out, "clean: %t\n", result.Clean)
 	if result.ReviewerName != "" {

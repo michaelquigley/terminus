@@ -26,7 +26,7 @@ func TestValidateRejectsDuplicateIDs(t *testing.T) {
 	}
 }
 
-func TestCheckAttributionAndScope(t *testing.T) {
+func TestCheckAttribution(t *testing.T) {
 	selected := []canon.Selected{
 		{Quality: canon.Quality{Head: canon.Head{ID: "df-logging"}, Ref: "go/df"}, Blocking: true},
 	}
@@ -35,16 +35,10 @@ func TestCheckAttributionAndScope(t *testing.T) {
 		t.Fatal("expected unknown quality error")
 	}
 
+	// findings may land on any file, including ones outside the starting points;
+	// only the attributed quality is constrained.
 	fs = []Finding{{ID: "f1", Quality: "df-logging", File: "internal/other.go"}}
-	if err := CheckScope(fs, []string{"main.go"}); err == nil {
-		t.Fatal("expected scope error")
-	}
-
-	fs = []Finding{{ID: "f1", Quality: "df-logging", File: "./main.go"}}
 	if err := CheckAttribution(fs, selected); err != nil {
-		t.Fatal(err)
-	}
-	if err := CheckScope(fs, []string{"main.go"}); err != nil {
 		t.Fatal(err)
 	}
 }

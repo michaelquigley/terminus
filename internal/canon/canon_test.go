@@ -26,7 +26,7 @@ func TestComposeAndNarrow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rubric, err := LoadRubric(store, "sample")
+	rubric, err := LoadRubric(store, "sample", DefaultRubric)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ qualities:
   - ref: go-conventions/dupe
 `)
 	store, _ := NewStore(root)
-	rubric, err := LoadRubric(store, "sample")
+	rubric, err := LoadRubric(store, "sample", DefaultRubric)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ qualities:
   - ref: go-conventions/df-logging
 `)
 	store, _ := NewStore(root)
-	_, _, err := LoadProjectRubric(store, filepath.Join(t.TempDir(), "sample"))
+	_, _, err := LoadProjectRubric(store, filepath.Join(t.TempDir(), "sample"), DefaultRubric)
 	if err == nil || !strings.Contains(err.Error(), "project.repo mismatch") {
 		t.Fatalf("expected project.repo mismatch, got %v", err)
 	}
@@ -101,6 +101,58 @@ func TestValidateTerritoryRejectsMalformedGlob(t *testing.T) {
 	err = ValidateTerritory("foo**bar")
 	if err == nil || !strings.Contains(err.Error(), "**") {
 		t.Fatalf("expected malformed ** error, got %v", err)
+	}
+}
+
+func TestNamedRubrics(t *testing.T) {
+	root := fixtureCanon(t)
+	writeFile(t, filepath.Join(root, "projects", "sample", "architecture.yaml"), `project:
+  repo: sample
+qualities:
+  - ref: go-conventions/project-wide
+`)
+	store, err := NewStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// empty request resolves to the default rubric.yaml (three qualities).
+	def, err := LoadRubric(store, "sample", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(def.Qualities) != 3 {
+		t.Fatalf("expected 3 qualities in default rubric, got %d", len(def.Qualities))
+	}
+
+	// a named rubric loads its own subset.
+	arch, err := LoadRubric(store, "sample", "architecture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(arch.Qualities) != 1 || arch.Qualities[0].Ref != "go-conventions/project-wide" {
+		t.Fatalf("unexpected architecture rubric: %#v", arch.Qualities)
+	}
+
+	// listing returns every rubric, sorted, without extension.
+	names, err := ListRubrics(store, "sample")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 2 || names[0] != "architecture" || names[1] != "rubric" {
+		t.Fatalf("unexpected rubric listing: %#v", names)
+	}
+
+	// a missing named rubric is an error.
+	if _, err := LoadRubric(store, "sample", "nope"); err == nil {
+		t.Fatal("expected missing rubric error")
+	}
+
+	// names that would escape the project directory are rejected before any read.
+	for _, bad := range []string{"../rubric", "a/b", ".."} {
+		if _, err := LoadRubric(store, "sample", bad); err == nil {
+			t.Fatalf("expected invalid rubric name %q to be rejected", bad)
+		}
 	}
 }
 

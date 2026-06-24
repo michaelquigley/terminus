@@ -64,7 +64,7 @@ jobs:
           fi
 
       - name: package artifact
-        run: tar -czf terminus-linux-amd64.tar.gz terminus CHANGELOG.md terminus.yaml.example rubric.yaml.example docs/current/overview.md
+        run: tar -czf terminus-linux-amd64.tar.gz terminus CHANGELOG.md examples/terminus.yaml.example examples/rubric.yaml.example docs/current/overview.md
 
       - name: upload artifact
         uses: actions/upload-artifact@v4

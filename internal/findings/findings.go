@@ -4,7 +4,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -83,26 +82,6 @@ func CheckAttribution(fs []Finding, selected []canon.Selected) error {
 	return nil
 }
 
-func CheckScope(fs []Finding, inScope []string) error {
-	scope := map[string]struct{}{}
-	for _, file := range inScope {
-		scope[normalizeFile(file)] = struct{}{}
-	}
-	for _, f := range fs {
-		file := normalizeFile(f.File)
-		if strings.EqualFold(file, "N/A") {
-			continue
-		}
-		if file == "" {
-			return fmt.Errorf("finding %q has an empty file", f.ID)
-		}
-		if _, ok := scope[file]; !ok {
-			return fmt.Errorf("finding %q points outside the review scope: %q", f.ID, f.File)
-		}
-	}
-	return nil
-}
-
 func Classify(fs []Finding, selected []canon.Selected) []Classified {
 	blocking := map[string]bool{}
 	for _, s := range selected {
@@ -133,11 +112,4 @@ func sortedKeys[K comparable](m map[K]struct{}) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func normalizeFile(file string) string {
-	file = filepath.ToSlash(strings.TrimSpace(file))
-	file = strings.TrimPrefix(file, "./")
-	file = strings.Trim(file, "/")
-	return file
 }

@@ -141,6 +141,65 @@ func TestReviewExplicitWorkingTreeNotPromoted(t *testing.T) {
 	}
 }
 
+func TestReviewWithNamedRubric(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() { _ = 1 }\n")
+
+	canonRoot := fixtureCanon(t, filepath.Base(repo))
+	writeFile(t, filepath.Join(canonRoot, "projects", filepath.Base(repo), "architecture.yaml"),
+		fmt.Sprintf("project:\n  repo: %q\nqualities:\n  - ref: go-conventions/df-logging\n    blocking: false\n", filepath.Base(repo)))
+	logDir := t.TempDir()
+	configPath := filepath.Join(t.TempDir(), "terminus.yaml")
+	writeFile(t, configPath, fmt.Sprintf(`canon_path: %q
+log_destination: %q
+reviewer:
+  name: dummy
+  impl: dummy
+`, canonRoot, logDir))
+
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--config", configPath, "review", "--repo", repo, "--rubric", "architecture"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("review command failed: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "rubric: architecture") {
+		t.Fatalf("expected rubric in output:\n%s", out.String())
+	}
+	if status := readSingleStatus(t, logDir, filepath.Base(repo)); status.Rubric != "architecture" {
+		t.Fatalf("expected status rubric architecture, got %q", status.Rubric)
+	}
+}
+
+func TestRubricsCommandLists(t *testing.T) {
+	repo := initGitRepo(t)
+	canonRoot := fixtureCanon(t, filepath.Base(repo))
+	writeFile(t, filepath.Join(canonRoot, "projects", filepath.Base(repo), "architecture.yaml"),
+		fmt.Sprintf("project:\n  repo: %q\nqualities:\n  - ref: go-conventions/df-logging\n", filepath.Base(repo)))
+	configPath := filepath.Join(t.TempDir(), "terminus.yaml")
+	writeFile(t, configPath, fmt.Sprintf("canon_path: %q\nlog_destination: %q\nreviewer:\n  name: dummy\n  impl: dummy\n", canonRoot, t.TempDir()))
+
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--config", configPath, "rubrics", "--repo", repo})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("rubrics command failed: %v\n%s", err, out.String())
+	}
+	text := out.String()
+	for _, want := range []string{"architecture", "rubric (default)"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("rubrics output missing %q:\n%s", want, text)
+		}
+	}
+}
+
 // promoteFixtureConfig writes a dummy-reviewer config and returns its path along
 // with the log destination, so the status helper can locate the written run.
 func promoteFixtureConfig(t *testing.T, repo string) (configPath string, logDir string) {

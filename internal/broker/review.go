@@ -40,6 +40,7 @@ type Broker struct {
 type reviewJob struct {
 	id           string
 	project      string
+	rubric       string
 	repoPath     string
 	dir          string
 	statusPath   string
@@ -109,9 +110,13 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 	if err != nil {
 		return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "open canon", err, nil)
 	}
-	rubric, project, err := canon.LoadProjectRubric(store, repoPath)
+	rubricName := strings.TrimSpace(req.Rubric)
+	if rubricName == "" {
+		rubricName = canon.DefaultRubric
+	}
+	rubric, project, err := canon.LoadProjectRubric(store, repoPath, rubricName)
 	if err != nil {
-		return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "load project rubric", err, map[string]any{"repo_path": repoPath})
+		return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "load project rubric", err, map[string]any{"repo_path": repoPath, "rubric": rubricName})
 	}
 	cs, err := b.extractChangeset(ctx, repoPath, req)
 	if err != nil {
@@ -145,6 +150,7 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 	job := &reviewJob{
 		id:           id,
 		project:      project,
+		rubric:       rubricName,
 		repoPath:     repoPath,
 		dir:          dir,
 		statusPath:   monitor.StatusPath(dir),
@@ -216,10 +222,6 @@ func (b *Broker) execute(ctx context.Context, job *reviewJob, promptText string)
 		b.finishFailure(job, errs.New(errs.CodeReviewerFailed, "reviewer output used an unknown quality", err, map[string]any{"reviewer": job.reviewerName, "raw": string(resp.Raw)}))
 		return
 	}
-	if err := findings.CheckScope(output.Findings, job.changeset.Files); err != nil {
-		b.finishFailure(job, errs.New(errs.CodeReviewerFailed, "reviewer output escaped review scope", err, map[string]any{"reviewer": job.reviewerName, "raw": string(resp.Raw)}))
-		return
-	}
 
 	classified := findings.Classify(output.Findings, job.selected)
 	clean, _ := Clean(classified)
@@ -231,6 +233,7 @@ func (b *Broker) execute(ctx context.Context, job *reviewJob, promptText string)
 	result := CollectReviewResponse{
 		ReviewID:     job.id,
 		Project:      job.project,
+		Rubric:       job.rubric,
 		State:        monitor.StateCompleted,
 		Verdict:      verdict,
 		Clean:        clean,
@@ -277,7 +280,7 @@ func writeRecord(job *reviewJob, verdict string, resp reviewer.ReviewResponse, c
 		}},
 		Sections: []record.Section{
 			{Heading: "Changeset", Markdown: changesetSection(job.changeset)},
-			{Heading: "Selected qualities", Markdown: selectedSection(job.selected)},
+			{Heading: "Selected qualities", Markdown: fmt.Sprintf("rubric: `%s`\n\n%s", job.rubric, selectedSection(job.selected))},
 			{Heading: "Classified findings", Markdown: classifiedSection(classified)},
 		},
 	})
@@ -379,6 +382,7 @@ func (b *Broker) ListReviews(ctx context.Context, project string) (ListReviewsRe
 			out = append(out, ReviewSummary{
 				ReviewID:      status.ReviewID,
 				Project:       status.Project,
+				Rubric:        status.Rubric,
 				State:         status.State,
 				ChangesetKind: status.ChangesetKind,
 				StartedAt:     status.StartedAt,
@@ -410,6 +414,7 @@ func (j *reviewJob) status(state string, logPath string, errInfo *errs.Info) mon
 	status := monitor.ReviewStatus{
 		ReviewID:      j.id,
 		Project:       j.project,
+		Rubric:        j.rubric,
 		State:         state,
 		ChangesetKind: j.changeset.Kind,
 		Reviewer: monitor.ReviewerInfo{
@@ -488,6 +493,7 @@ func writeResult(path string, result CollectReviewResponse) error {
 	file := reviewResultFile{
 		ReviewID:     result.ReviewID,
 		Project:      result.Project,
+		Rubric:       result.Rubric,
 		State:        result.State,
 		Verdict:      result.Verdict,
 		Clean:        result.Clean,
@@ -553,6 +559,7 @@ func collectFromStored(stored reviewResultFile) CollectReviewResponse {
 	resp := CollectReviewResponse{
 		ReviewID:     stored.ReviewID,
 		Project:      stored.Project,
+		Rubric:       stored.Rubric,
 		State:        stored.State,
 		Verdict:      stored.Verdict,
 		Clean:        stored.Clean,

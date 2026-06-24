@@ -48,6 +48,7 @@ func newRootCommand() *cobra.Command {
 	root.PersistentFlags().BoolVar(&verbose, "verbose", false, "enable verbose stderr logging")
 	root.AddCommand(newServeCommand(&configPath, &verbose))
 	root.AddCommand(newReviewCommand(&configPath, &verbose))
+	root.AddCommand(newRubricsCommand(&configPath, &verbose))
 	root.AddCommand(newMonitorCommand(&configPath))
 	root.AddCommand(build.NewVersionCmd("terminus"))
 	return root
@@ -146,6 +147,9 @@ func printReviewStatus(cmd *cobra.Command, status monitor.ReviewStatus) {
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "review '%s' %s\n", status.ReviewID, status.State)
 	fmt.Fprintf(out, "project: %s\n", status.Project)
+	if status.Rubric != "" {
+		fmt.Fprintf(out, "rubric: %s\n", status.Rubric)
+	}
 	fmt.Fprintf(out, "changeset: %s\n", status.ChangesetKind)
 	if status.Reviewer.Name != "" {
 		fmt.Fprintf(out, "reviewer: %s\n", status.Reviewer.Name)

@@ -27,6 +27,7 @@ type ReviewerInfo struct {
 type ReviewStatus struct {
 	ReviewID      string        `json:"review_id"`
 	Project       string        `json:"project"`
+	Rubric        string        `json:"rubric,omitempty"`
 	State         string        `json:"state"`
 	ChangesetKind string        `json:"changeset_kind"`
 	Reviewer      ReviewerInfo  `json:"reviewer"`
