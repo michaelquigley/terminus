@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+FEATURE: Add Mercurius-style CI build integration using the shared `push`
+framework. The workflow now vets, tests, builds a stamped linux-amd64 binary
+with `push/ci/ldflags.sh`, verifies `terminus version` is stamped, uploads an
+artifact, and drafts a release on `v*` tags.
+
 CHANGE: Bare `terminus` now prints command help instead of starting the MCP
 server. Use `terminus serve` as the explicit stdio MCP server entry point.
 

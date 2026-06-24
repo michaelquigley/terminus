@@ -82,6 +82,8 @@ There is no reviewer severity field. After schema validation, Terminus rejects d
 
 Bare `terminus` prints command help and exits successfully. `terminus serve` is the explicit stdio MCP server entry point.
 
+`terminus version` prints shared `push/build` metadata. Unstamped local builds report `v0.1.x [developer build]`; CI builds stamp version, commit, build time, branch, builder, Go runtime, and target through the `push` `ci/ldflags.sh` script.
+
 `terminus review` runs a review in the foreground. It accepts the same review target as `start_review`:
 
 ```bash
