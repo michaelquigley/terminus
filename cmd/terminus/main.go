@@ -15,6 +15,7 @@ import (
 	"github.com/michaelquigley/terminus/internal/config"
 	"github.com/michaelquigley/terminus/internal/mcpserver"
 	"github.com/michaelquigley/terminus/internal/monitor"
+	"github.com/michaelquigley/terminus/internal/wiring"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 )
@@ -75,10 +76,11 @@ func runServer(cmd *cobra.Command, configPath string, verbose bool) error {
 	if err := cfg.EnsureLogDestination(); err != nil {
 		return err
 	}
-	server, _, err := mcpserver.New(cfg)
+	b, err := wiring.NewBroker(cfg)
 	if err != nil {
 		return err
 	}
+	server := mcpserver.New(b)
 	err = server.Run(cmd.Context(), &mcp.StdioTransport{})
 	if errors.Is(err, context.Canceled) {
 		return nil

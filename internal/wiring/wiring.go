@@ -20,6 +20,17 @@ type ReviewerInfo struct {
 	Model string
 }
 
+// NewBroker assembles a broker from config. This is the composition root: the
+// command layer calls it and hands the broker to the transports (the MCP server,
+// the foreground review command), so those adapters never depend on wiring.
+func NewBroker(cfg *config.Config) (*broker.Broker, error) {
+	options, err := BrokerOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return broker.New(options), nil
+}
+
 func BrokerOptions(cfg *config.Config) (broker.Options, error) {
 	r, info, err := BuildReviewer(cfg.Reviewer)
 	if err != nil {

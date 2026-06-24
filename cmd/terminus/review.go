@@ -103,11 +103,10 @@ func runReview(cmd *cobra.Command, configPath string, verbose bool, req broker.S
 	if err := cfg.EnsureLogDestination(); err != nil {
 		return err
 	}
-	options, err := wiring.BrokerOptions(cfg)
+	b, err := wiring.NewBroker(cfg)
 	if err != nil {
 		return err
 	}
-	b := broker.New(options)
 	result, err := b.RunReview(cmd.Context(), req)
 	if err != nil {
 		return err

@@ -8,9 +8,7 @@ import (
 
 	"github.com/michaelquigley/push/build"
 	"github.com/michaelquigley/terminus/internal/broker"
-	"github.com/michaelquigley/terminus/internal/config"
 	"github.com/michaelquigley/terminus/internal/errs"
-	"github.com/michaelquigley/terminus/internal/wiring"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -54,21 +52,13 @@ type ErrorOutput struct {
 	At      string         `json:"at,omitempty"`
 }
 
-func New(cfg *config.Config) (*mcp.Server, *broker.Broker, error) {
-	if cfg == nil {
-		return nil, nil, errors.New("config is nil")
-	}
-	if err := cfg.Validate(); err != nil {
-		return nil, nil, err
-	}
-	options, err := wiring.BrokerOptions(cfg)
-	if err != nil {
-		return nil, nil, err
-	}
-	b := broker.New(options)
+// New wraps an already-constructed broker in an MCP server. The broker is built
+// by the command layer (see wiring.NewBroker); this adapter stays out of
+// composition and only registers the transport.
+func New(b *broker.Broker) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "terminus", Version: build.String()}, nil)
 	RegisterTools(server, b)
-	return server, b, nil
+	return server
 }
 
 func RegisterTools(server *mcp.Server, b *broker.Broker) {
