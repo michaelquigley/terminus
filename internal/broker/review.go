@@ -29,6 +29,7 @@ const (
 	promptFileName   = "_prompt.md"
 	findingsFileName = "_findings.md"
 	resultFileName   = "result.json"
+	adHocRubric      = "(ad-hoc)"
 )
 
 type Broker struct {
@@ -110,13 +111,28 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 	if err != nil {
 		return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "open canon", err, nil)
 	}
-	rubricName := strings.TrimSpace(req.Rubric)
-	if rubricName == "" {
-		rubricName = canon.DefaultRubric
-	}
-	rubric, project, err := canon.LoadProjectRubric(store, repoPath, rubricName)
-	if err != nil {
-		return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "load project rubric", err, map[string]any{"repo_path": repoPath, "rubric": rubricName})
+	var rubric canon.Rubric
+	var project string
+	var rubricName string
+	if len(req.Qualities) > 0 {
+		// ad-hoc review: take the quality refs directly, bypassing rubric
+		// resolution. Compose still loads, validates, and dedupes them.
+		project = canon.ProjectIdentity(repoPath)
+		rubricName = adHocRubric
+		entries := make([]canon.RubricEntry, 0, len(req.Qualities))
+		for _, ref := range req.Qualities {
+			entries = append(entries, canon.RubricEntry{Ref: ref, Blocking: req.QualitiesBlocking})
+		}
+		rubric = canon.Rubric{Project: canon.ProjectInfo{Repo: project}, Qualities: entries}
+	} else {
+		rubricName = strings.TrimSpace(req.Rubric)
+		if rubricName == "" {
+			rubricName = canon.DefaultRubric
+		}
+		rubric, project, err = canon.LoadProjectRubric(store, repoPath, rubricName)
+		if err != nil {
+			return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "load project rubric", err, map[string]any{"repo_path": repoPath, "rubric": rubricName})
+		}
 	}
 	cs, err := b.extractChangeset(ctx, repoPath, req)
 	if err != nil {

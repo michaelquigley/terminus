@@ -14,10 +14,12 @@ import (
 )
 
 type StartReviewInput struct {
-	RepoPath      string   `json:"repo_path,omitempty"`
-	ChangesetKind string   `json:"changeset_kind,omitempty"`
-	Paths         []string `json:"paths,omitempty"`
-	Rubric        string   `json:"rubric,omitempty"`
+	RepoPath          string   `json:"repo_path,omitempty"`
+	ChangesetKind     string   `json:"changeset_kind,omitempty"`
+	Paths             []string `json:"paths,omitempty"`
+	Rubric            string   `json:"rubric,omitempty"`
+	Qualities         []string `json:"qualities,omitempty"`
+	QualitiesBlocking bool     `json:"qualities_blocking,omitempty"`
 }
 
 type StartReviewOutput struct {
@@ -64,13 +66,15 @@ func New(b *broker.Broker) *mcp.Server {
 func RegisterTools(server *mcp.Server, b *broker.Broker) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "start_review",
-		Description: "start one Terminus code review in the background. repo_path is required and drives project resolution from the canon. changeset_kind is working-tree, paths, or full; paths mode requires paths. rubric is the named rubric to select qualities from (defaults to the project's `rubric`); the available rubric names come from the canon's projects/<project>/ directory. use the returned monitor_command while the review runs, then call collect_review with review_id.",
+		Description: "start one Terminus code review in the background. repo_path is required and drives project resolution from the canon. changeset_kind is working-tree, paths, or full; paths mode requires paths. rubric is the named rubric to select qualities from (defaults to the project's `rubric`); the available rubric names come from the canon's projects/<project>/ directory. qualities is an optional list of canon quality refs to review against directly, bypassing the rubric (an ad-hoc review); when set it takes precedence over rubric, and qualities_blocking makes them blocking (they are advisory by default). use the returned monitor_command while the review runs, then call collect_review with review_id.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input StartReviewInput) (*mcp.CallToolResult, any, error) {
 		response, err := b.StartReview(ctx, broker.StartReviewRequest{
-			RepoPath:      input.RepoPath,
-			ChangesetKind: input.ChangesetKind,
-			Paths:         append([]string(nil), input.Paths...),
-			Rubric:        input.Rubric,
+			RepoPath:          input.RepoPath,
+			ChangesetKind:     input.ChangesetKind,
+			Paths:             append([]string(nil), input.Paths...),
+			Rubric:            input.Rubric,
+			Qualities:         append([]string(nil), input.Qualities...),
+			QualitiesBlocking: input.QualitiesBlocking,
 		})
 		if err != nil {
 			return toolErrorResult(err)

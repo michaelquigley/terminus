@@ -97,13 +97,15 @@ terminus review --kind paths internal/canon cmd/terminus
 
 `--repo` defaults to `.`, `--kind` defaults to `working-tree`, `--rubric` defaults to `rubric` (the project's `rubric.yaml`), and path arguments are only valid with `--kind paths`. The command writes the same review artifacts as MCP review startup, waits for the reviewer to finish, then prints the verdict, finding counts, prompt path, findings log path, and a compact finding list. A `not_clean` result is still a successful command execution; process failure is reserved for operational errors.
 
+`--quality <ref>` (repeatable) runs an ad-hoc review against the given canon quality refs directly, bypassing rubric resolution — useful for trying a quality, or reviewing a project that has no rubric yet. It needs no rubric file and does not check `project.repo`; the project is still the repo basename. Ad-hoc qualities are advisory unless `--blocking` is passed; the recorded rubric is `(ad-hoc)`. `--quality` and `--rubric` cannot be combined.
+
 `terminus rubrics --repo <path>` lists the rubric names available for a project, derived from the `*.yaml` files under the canon's `projects/<project>/` directory; the default rubric is marked.
 
 When `--kind` is left at its default and the working tree is clean, the command promotes the review to `full` and prints `working tree clean; reviewing full tracked repo`. This keeps a bare `terminus review` on a committed repo from selecting nothing and reporting a vacuous `clean`. An explicit `--kind working-tree` is always honored, even on a clean tree. The promotion is CLI-only; the MCP `start_review` tool reviews exactly the `changeset_kind` it is given.
 
 ## MCP Surface
 
-`start_review` takes `repo_path`, `changeset_kind` (`working-tree`, `paths`, or `full`), optional `paths`, and an optional `rubric` name (defaulting to `rubric`). It resolves the named project rubric, narrows the qualities, writes `_prompt.md`, starts the reviewer in the background, and returns a `review_id` plus a monitor command. The selected rubric is recorded in `status.json` and `result.json`.
+`start_review` takes `repo_path`, `changeset_kind` (`working-tree`, `paths`, or `full`), optional `paths`, and an optional `rubric` name (defaulting to `rubric`). It resolves the named project rubric, narrows the qualities, writes `_prompt.md`, starts the reviewer in the background, and returns a `review_id` plus a monitor command. The selected rubric is recorded in `status.json` and `result.json`. An optional `qualities` list reviews against those canon quality refs directly, bypassing the rubric (an ad-hoc review); it takes precedence over `rubric`, and `qualities_blocking` makes them blocking (advisory by default).
 
 `collect_review` returns a completed review when given `review_id`; if omitted, it lists known review runs. A running review returns `conflict`.
 

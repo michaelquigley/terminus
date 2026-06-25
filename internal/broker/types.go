@@ -27,6 +27,10 @@ type StartReviewRequest struct {
 	ChangesetKind string
 	Paths         []string
 	Rubric        string
+	// Qualities, when non-empty, runs an ad-hoc review against these canon
+	// quality refs directly, bypassing rubric resolution (Rubric is ignored).
+	Qualities         []string
+	QualitiesBlocking bool
 }
 
 type StartReviewResponse struct {

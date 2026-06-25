@@ -18,6 +18,8 @@ func newReviewCommand(configPath *string, verbose *bool) *cobra.Command {
 	var repoPath string
 	var kind string
 	var rubric string
+	var qualities []string
+	var blocking bool
 
 	cmd := &cobra.Command{
 		Use:          "review [paths...]",
@@ -28,7 +30,15 @@ func newReviewCommand(configPath *string, verbose *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if len(qualities) > 0 && cmd.Flags().Changed("rubric") {
+				return errors.New("cannot combine --rubric and --quality; --quality runs an ad-hoc review")
+			}
+			if cmd.Flags().Changed("blocking") && len(qualities) == 0 {
+				return errors.New("--blocking only applies with --quality")
+			}
 			req.Rubric = rubric
+			req.Qualities = append([]string(nil), qualities...)
+			req.QualitiesBlocking = blocking
 			// when --kind was left at its default and the working tree is clean,
 			// a working-tree review would select nothing and report a vacuous
 			// clean verdict. promote to a full review so a bare `terminus review`
@@ -50,6 +60,8 @@ func newReviewCommand(configPath *string, verbose *bool) *cobra.Command {
 	cmd.Flags().StringVar(&repoPath, "repo", ".", "repo path to review")
 	cmd.Flags().StringVar(&kind, "kind", changeset.KindWorkingTree, "changeset kind: working-tree, paths, or full")
 	cmd.Flags().StringVar(&rubric, "rubric", canon.DefaultRubric, "rubric name to select qualities from the canon")
+	cmd.Flags().StringArrayVar(&qualities, "quality", nil, "canon quality ref to review against directly (repeatable); runs an ad-hoc review, bypassing the rubric")
+	cmd.Flags().BoolVar(&blocking, "blocking", false, "treat --quality entries as blocking (ad-hoc reviews only)")
 	return cmd
 }
 

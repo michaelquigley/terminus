@@ -200,6 +200,51 @@ func TestRubricsCommandLists(t *testing.T) {
 	}
 }
 
+func TestReviewAdHocQualities(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() { _ = 1 }\n")
+
+	configPath, logDir := promoteFixtureConfig(t, repo)
+
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	// review against a canon quality ref directly, no rubric.
+	cmd.SetArgs([]string{"--config", configPath, "review", "--repo", repo, "--quality", "go-conventions/df-logging"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("ad-hoc review failed: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "rubric: (ad-hoc)") {
+		t.Fatalf("expected ad-hoc rubric in output:\n%s", out.String())
+	}
+	status := readSingleStatus(t, logDir, filepath.Base(repo))
+	if status.Rubric != "(ad-hoc)" {
+		t.Fatalf("expected status rubric (ad-hoc), got %q", status.Rubric)
+	}
+	if len(status.Qualities) != 1 || status.Qualities[0].ID != "df-logging" {
+		t.Fatalf("expected only df-logging selected, got %#v", status.Qualities)
+	}
+	if status.Qualities[0].Blocking {
+		t.Fatal("expected ad-hoc quality to be advisory by default")
+	}
+}
+
+func TestReviewQualityRubricMutuallyExclusive(t *testing.T) {
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"review", "--repo", ".", "--rubric", "architecture", "--quality", "go-conventions/df-logging"})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "cannot combine --rubric and --quality") {
+		t.Fatalf("expected mutual-exclusion error, got %v", err)
+	}
+}
+
 // promoteFixtureConfig writes a dummy-reviewer config and returns its path along
 // with the log destination, so the status helper can locate the written run.
 func promoteFixtureConfig(t *testing.T, repo string) (configPath string, logDir string) {

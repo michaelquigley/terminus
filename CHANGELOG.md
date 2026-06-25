@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+FEATURE: Ad-hoc reviews — `terminus review --quality <ref>` (repeatable) and the MCP
+`start_review` `qualities` field review against canon quality refs directly, bypassing
+rubric resolution. Useful for trying a quality or reviewing a project with no rubric
+yet; no rubric file and no `project.repo` check are required. Ad-hoc qualities are
+advisory unless `--blocking` / `qualities_blocking` is set, the recorded rubric is
+`(ad-hoc)`, and `--quality` cannot be combined with `--rubric`.
+
 ## v0.1.0
 
 FEATURE: Terminus review spine — a local MCP code-review broker. It points a
