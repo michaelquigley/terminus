@@ -233,6 +233,41 @@ func TestReviewAdHocQualities(t *testing.T) {
 	}
 }
 
+func TestReviewAdHocBlocking(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() { _ = 1 }\n")
+
+	configPath, logDir := promoteFixtureConfig(t, repo)
+
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--config", configPath, "review", "--repo", repo, "--quality", "go-conventions/df-logging", "--blocking"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("review command failed: %v\n%s", err, out.String())
+	}
+	status := readSingleStatus(t, logDir, filepath.Base(repo))
+	if len(status.Qualities) != 1 || !status.Qualities[0].Blocking {
+		t.Fatalf("expected df-logging to be blocking, got %#v", status.Qualities)
+	}
+}
+
+func TestReviewBlockingRequiresQuality(t *testing.T) {
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"review", "--repo", ".", "--blocking"})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "--blocking only applies with --quality") {
+		t.Fatalf("expected blocking-guard error, got %v", err)
+	}
+}
+
 func TestReviewQualityRubricMutuallyExclusive(t *testing.T) {
 	cmd := newRootCommand()
 	var out bytes.Buffer
