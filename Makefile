@@ -1,6 +1,6 @@
 TARGETS ?= ./cmd/terminus
 
-.PHONY: build clean test
+.PHONY: build clean test push
 .DEFAULT_GOAL := build
 GOBIN ?= $(shell go env GOPATH)/bin
 
@@ -14,3 +14,6 @@ build:
 test:
 	go test ./... -count=1
 	go vet ./...
+
+push:
+	push vendor ${GOBIN}/terminus terminus
