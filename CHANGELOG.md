@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.1
+
 CHANGE: Persist Terminus's own review artifacts through the shared `df/dd` binding
 substrate, so Terminus follows the `df-binding` convention it enforces. `status.json`
 and `result.json` now marshal and unmarshal via `dd` instead of `encoding/json`; the
