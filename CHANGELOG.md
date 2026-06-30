@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+CHANGE: Persist Terminus's own review artifacts through the shared `df/dd` binding
+substrate, so Terminus follows the `df-binding` convention it enforces. `status.json`
+and `result.json` now marshal and unmarshal via `dd` instead of `encoding/json`; the
+reviewer's raw output passes through a `json.RawMessage` converter untouched, and the
+round-tripped values are preserved. On-disk keys are now sorted and previously-omitted
+empty fields appear, but the MCP/CLI wire format is unchanged.
+
+FIX: Lowercase the reviewer's triage guidance strings so they follow the
+`lowercase-output` convention.
+
 FEATURE: Ad-hoc reviews — `terminus review --quality <ref>` (repeatable) and the MCP
 `start_review` `qualities` field review against canon quality refs directly, bypassing
 rubric resolution. Useful for trying a quality or reviewing a project with no rubric
