@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+CHANGE: `terminus rubrics` now shows each rubric's composed qualities and whether
+each blocks, not just the rubric names — so an operator can see what a review will
+apply, and which tier each quality comes from, without opening the canon.
+
 ## v0.1.1
 
 CHANGE: Persist Terminus's own review artifacts through the shared `df/dd` binding

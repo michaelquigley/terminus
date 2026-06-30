@@ -193,7 +193,7 @@ func TestRubricsCommandLists(t *testing.T) {
 		t.Fatalf("rubrics command failed: %v\n%s", err, out.String())
 	}
 	text := out.String()
-	for _, want := range []string{"architecture", "rubric (default)"} {
+	for _, want := range []string{"architecture", "rubric (default)", "df-logging", "blocking", "go-conventions/df-logging"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("rubrics output missing %q:\n%s", want, text)
 		}

@@ -29,12 +29,52 @@ Matching should refresh a hand-reviewed `rubric.yaml` from existing qualities.
 Harvesting should only propose stubs for human authoring and must never promote
 or mature a quality automatically.
 
-## Write-back Loop
+## Write-back Loop (dispositions and sharpening)
 
-Terminus v1 records no dispositions. A later write-back pass can capture human
-decisions, sharpen qualities from accumulated dispositions, and canonize
-project-local qualities. That is the moment Terminus would start using
-`record.WriteNotes`.
+Terminus v1 records no dispositions: every review starts blank, so a finding the
+operator already weighed re-fires on the next run. That is tolerable while review
+is semi-manual and occasional — a human re-rejects and moves on — but it does not
+scale to the automated, frequent review this is heading toward, where a verdict
+dominated by known-rejected findings buries the signal. Convergence depends on the
+system remembering what was already decided.
+
+Two distinct things make a finding stop recurring, and only one needs new
+machinery:
+
+- **Settled by rule change.** The finding was a false positive because the *rule*
+  was too broad; the fix is to sharpen the quality's `discrimination`/`boundary`,
+  after which it genuinely should not fire anywhere. This already works — it is how
+  the audio-thread "heavy vs cheap" refinement landed. No disposition store needed.
+- **Settled by disposition.** The finding is legitimate under the rule, but the
+  operator accepts, defers, or rejects it *for this project* (a deliberate boundary
+  case). This is what needs a write-back store: a per-project record of
+  "considered, decided X, don't re-raise."
+
+### What a disposition pass would need
+
+- **A stable finding identity across runs** — the hard problem. A finding's `id`
+  and line numbers drift run-to-run, so dispositions must key on a fingerprint that
+  survives edits (quality id + file + a normalized locus/claim, not the raw line
+  range). Get this wrong and dispositions either leak (suppress the wrong finding)
+  or never match (suppress nothing).
+- **A durable, per-project store outside the subject repo**, written through
+  `record.WriteNotes` (the hook reserved for this), alongside the review records.
+  Dispositions are review metadata, not project code.
+- **A suppression path at review time** — feed "these were considered and settled,
+  do not re-raise" into the reviewer prompt, or filter settled findings during
+  classification, or both: a prompt-level hint (so the reviewer spends no attention
+  on them) with a post-classification safety net. The prompt-feed risks the
+  reviewer rationalizing around a suppression; the post-filter is cleaner but wastes
+  reviewer attention. A hybrid is likely.
+- **Human-authored sharpening, not auto-maturation.** Accumulated rejections of a
+  quality signal that its `discrimination` is wrong and can *propose* a sharpening,
+  but a human authors it — consistent with the propose-don't-promote discipline.
+  Dispositions never silently rewrite a quality or canonize a project-local one.
+
+This is a larger effort than the v1 spine, gated on real review volume making the
+recurrence painful — which the move toward automated review will bring. The
+`changeset_kind` naming finding (deliberately deferred, with nowhere to record
+that) is the standing example of the gap.
 
 ## Targeted vs. Full Review (unsettled)
 
