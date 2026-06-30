@@ -1,13 +1,13 @@
 package monitor
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/michaelquigley/df/dd"
 	"github.com/michaelquigley/terminus/internal/errs"
 )
 
@@ -59,7 +59,7 @@ func WriteStatus(path string, status ReviewStatus) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	raw, err := json.MarshalIndent(status, "", "  ")
+	raw, err := dd.UnbindJSON(status)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func ReadStatus(path string) (ReviewStatus, error) {
 		return ReviewStatus{}, err
 	}
 	var status ReviewStatus
-	if err := json.Unmarshal(raw, &status); err != nil {
+	if err := dd.BindJSON(&status, raw); err != nil {
 		return ReviewStatus{}, err
 	}
 	return status, nil

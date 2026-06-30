@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -83,6 +84,58 @@ func TestBrokerRunReview(t *testing.T) {
 	}
 	if _, err := os.Stat(result.LogPath); err != nil {
 		t.Fatalf("expected findings document: %v", err)
+	}
+}
+
+// guards the dd migration: a review written to result.json by one broker must
+// collect identically from disk through a second broker (collectFromStored +
+// dd.BindJSON + the json.RawMessage converter), so the round-trip preserves the
+// verdict, findings, and the raw reviewer output.
+func TestCollectFromDiskRoundTrip(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+
+	canonRoot := fixtureCanon(t, filepath.Base(repo))
+	raw := json.RawMessage(`{"summary":"needs work","findings":[{"id":"f1","quality":"df-logging","file":"main.go","lines":"1","claim":"c","rationale":"r","suggestion":"s"}]}`)
+	opts := Options{
+		LogDestination: t.TempDir(),
+		CanonPath:      canonRoot,
+		Reviewer:       dummy.New(dummy.Options{Raw: raw}),
+		ReviewerInfo:   ReviewerInfo{Name: "dummy", Impl: "dummy"},
+	}
+
+	// broker A runs the review, writing status.json + result.json via dd.
+	live, err := New(opts).RunReview(context.Background(), StartReviewRequest{RepoPath: repo, ChangesetKind: changeset.KindWorkingTree})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// broker B has an empty in-memory job map, so collect reads from disk.
+	got, err := New(opts).CollectReview(context.Background(), CollectReviewRequest{Project: live.Project, ReviewID: live.ReviewID})
+	if err != nil {
+		t.Fatalf("collect from disk: %v", err)
+	}
+
+	if got.Verdict != live.Verdict || got.Clean != live.Clean {
+		t.Fatalf("verdict drift through disk: got %q/%v, live %q/%v", got.Verdict, got.Clean, live.Verdict, live.Clean)
+	}
+	if !reflect.DeepEqual(got.Findings, live.Findings) {
+		t.Fatalf("findings drift through disk:\n got:  %#v\n live: %#v", got.Findings, live.Findings)
+	}
+	// the raw reviewer output must survive the converter round-trip (semantically;
+	// disk re-serialization may reorder keys, so compare parsed JSON).
+	var gotRaw, liveRaw any
+	if err := json.Unmarshal(got.Raw, &gotRaw); err != nil {
+		t.Fatalf("disk Raw is not valid JSON: %v (%s)", err, got.Raw)
+	}
+	if err := json.Unmarshal(live.Raw, &liveRaw); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotRaw, liveRaw) {
+		t.Fatalf("raw drift through disk round-trip:\n disk: %s\n live: %s", got.Raw, live.Raw)
 	}
 }
 

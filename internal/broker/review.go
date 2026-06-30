@@ -10,11 +10,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/michaelquigley/df/dd"
 	"github.com/michaelquigley/terminus/internal/canon"
 	"github.com/michaelquigley/terminus/internal/changeset"
 	"github.com/michaelquigley/terminus/internal/errs"
@@ -363,7 +365,7 @@ func (b *Broker) CollectReview(ctx context.Context, req CollectReviewRequest) (C
 		return CollectReviewResponse{}, errs.New(errs.CodeNotFound, "review result not found", err, nil)
 	}
 	var stored reviewResultFile
-	if err := json.Unmarshal(raw, &stored); err != nil {
+	if err := dd.BindJSON(&stored, raw, ddJSONOpts); err != nil {
 		return CollectReviewResponse{}, errs.New(errs.CodeInternalError, "parse review result", err, nil)
 	}
 	return collectFromStored(stored), nil
@@ -500,9 +502,9 @@ func orderTriage(classified []findings.Classified) []TriageFindingOutput {
 
 func triageGuidance(findings []TriageFindingOutput) string {
 	if len(findings) == 0 {
-		return "No findings were returned. Summarize that the review is clean, then decide whether another fresh review is needed."
+		return "no findings were returned. summarize that the review is clean, then decide whether another fresh review is needed."
 	}
-	return "Present the findings as a concise overview, then walk them one at a time. Blocking findings come first. Do not implement a fix until the user has decided how to handle that finding."
+	return "present the findings as a concise overview, then walk them one at a time. blocking findings come first. do not implement a fix until the user has decided how to handle that finding."
 }
 
 func writeResult(path string, result CollectReviewResponse) error {
@@ -523,11 +525,47 @@ func writeResult(path string, result CollectReviewResponse) error {
 	return writeJSONAtomic(path, file)
 }
 
+// rawMessageConverter passes a json.RawMessage field (the reviewer's raw output)
+// through dd as embedded JSON; dd's generic unbind would otherwise render the
+// underlying []byte as a number array.
+type rawMessageConverter struct{}
+
+func (rawMessageConverter) ToRaw(value interface{}) (interface{}, error) {
+	rm, ok := value.(json.RawMessage)
+	if !ok || len(rm) == 0 {
+		return nil, nil
+	}
+	var v any
+	if err := json.Unmarshal(rm, &v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+func (rawMessageConverter) FromRaw(raw interface{}) (interface{}, error) {
+	if raw == nil {
+		return json.RawMessage(nil), nil
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(b), nil
+}
+
+// ddJSONOpts binds review artifacts through df/dd while passing the raw reviewer
+// output through unchanged.
+var ddJSONOpts = &dd.Options{
+	Converters: map[reflect.Type]dd.Converter{
+		reflect.TypeOf(json.RawMessage{}): rawMessageConverter{},
+	},
+}
+
 func writeJSONAtomic(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	raw, err := json.MarshalIndent(v, "", "  ")
+	raw, err := dd.UnbindJSON(v, ddJSONOpts)
 	if err != nil {
 		return err
 	}
