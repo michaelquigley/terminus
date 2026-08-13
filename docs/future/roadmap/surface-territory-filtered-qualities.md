@@ -1,8 +1,9 @@
 ---
 title: surface territory-filtered qualities
-state: inbox
+state: horizon
 created: 2026-08-12
 tags: [enhancement]
+milestone: v0.1.x
 source: review-loop feedback, sterling config arc 2026-08-07
 ---
 
