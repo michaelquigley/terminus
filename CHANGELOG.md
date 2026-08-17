@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.1.2
+
+CHANGE: Upgraded theharnessbody to v0.1.1, which hermetically seals pi review runs off from the host's development-flavoured pi configuration — no extension discovery or execution (extensions are how MCP servers arrive in pi), no skills or prompt templates, the reviewed checkout forced untrusted regardless of pi's trust store, and startup network operations disabled. Previously this required `extra_args` in the reviewer config; it's now unconditional in the adapter.
+
 CHANGE: `terminus rubrics` now shows each rubric's composed qualities and whether
 each blocks, not just the rubric names — so an operator can see what a review will
 apply, and which tier each quality comes from, without opening the canon.
