@@ -48,7 +48,7 @@ type Info struct {
 	At      string         `json:"at,omitempty"`
 }
 
-func InfoFrom(err error) *Info {
+func NewInfo(err error) *Info {
 	if err == nil {
 		return nil
 	}

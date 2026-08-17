@@ -118,7 +118,7 @@ func toolErrorResult(err error) (*mcp.CallToolResult, any, error) {
 	if !errors.As(err, &e) {
 		return nil, nil, rpcError(err)
 	}
-	output := errorOutput(errs.InfoFrom(e))
+	output := errorOutput(errs.NewInfo(e))
 	text := fmt.Sprintf("%s: %s", output.Code, output.Message)
 	if cause, ok := output.Details["cause"].(string); ok && cause != "" {
 		text += "\ncause: " + cause

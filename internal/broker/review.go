@@ -316,7 +316,7 @@ func (b *Broker) finishFailure(job *reviewJob, err error) {
 	b.mu.Lock()
 	job.err = err
 	b.mu.Unlock()
-	info := errs.WithTime(errs.InfoFrom(err), time.Now().UTC())
+	info := errs.WithTime(errs.NewInfo(err), time.Now().UTC())
 	_ = monitor.WriteStatus(job.statusPath, job.status(monitor.StateFailed, "", info))
 	close(job.done)
 }
