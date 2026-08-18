@@ -54,7 +54,7 @@ type ErrorOutput struct {
 	At      string         `json:"at,omitempty"`
 }
 
-// New wraps an already-constructed broker in an MCP server. The broker is built
+// New wraps an already-constructed broker in an MCP server. the broker is built
 // by the command layer (see wiring.NewBroker); this adapter stays out of
 // composition and only registers the transport.
 func New(b *broker.Broker) *mcp.Server {

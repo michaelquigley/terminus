@@ -3,7 +3,7 @@ module github.com/michaelquigley/terminus
 go 1.26.2
 
 require (
-	github.com/michaelquigley/df v1.0.1
+	github.com/michaelquigley/df v1.0.3
 	github.com/michaelquigley/push v0.2.1
 	github.com/michaelquigley/theharnessbody v0.1.1
 	github.com/modelcontextprotocol/go-sdk v1.5.0

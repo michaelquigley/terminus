@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/michaelquigley/df/dd"
 	"github.com/michaelquigley/terminus/internal/canon"
 	"github.com/michaelquigley/theharnessbody/reviewer/schema"
 )
@@ -26,7 +27,7 @@ type Finding struct {
 	Lines      string  `json:"lines"`
 	Claim      string  `json:"claim"`
 	Rationale  string  `json:"rationale"`
-	Suggestion *string `json:"suggestion"`
+	Suggestion *string `json:"suggestion" dd:",+nullable"`
 }
 
 type Classified struct {
@@ -66,7 +67,7 @@ func Validate(raw json.RawMessage) error {
 
 func Parse(raw json.RawMessage) (Output, error) {
 	var out Output
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := dd.BindJSON(&out, raw); err != nil {
 		return Output{}, fmt.Errorf("parse reviewer output: %w", err)
 	}
 	return out, nil

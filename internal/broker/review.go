@@ -670,7 +670,18 @@ func selectedSection(selected []canon.Selected) string {
 }
 
 func classifiedSection(classified []findings.Classified) string {
-	raw, err := json.MarshalIndent(classified, "", "  ")
+	// dd.Unbind takes structs, not slices, so each item unbinds through dd and
+	// the collected maps marshal as a top-level array — the same final step
+	// dd.UnbindJSON performs on its own map, keeping the record shape stable.
+	items := make([]map[string]any, 0, len(classified))
+	for _, c := range classified {
+		m, err := dd.Unbind(c)
+		if err != nil {
+			return fmt.Sprintf("failed to render classified findings: %v\n", err)
+		}
+		items = append(items, m)
+	}
+	raw, err := json.MarshalIndent(items, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("failed to render classified findings: %v\n", err)
 	}

@@ -2,65 +2,32 @@
 
 ## Unreleased
 
+## v0.1.3
+
+CHANGE: The two remaining project-data JSON paths outside df/dd now conform to the df-binding quality, surfaced by the first full-repo terminus self-review: `findings.Parse` binds reviewer output through `dd.BindJSON` (with `suggestion` tagged `+nullable`, since the findings schema makes it required-and-nullable by design), and the `_findings.md` classified block unbinds each finding through `dd.Unbind` before rendering, so its keys are now sorted. Requires df v1.0.3 for JSON null support.
+
 ## v0.1.2
 
 CHANGE: Upgraded theharnessbody to v0.1.1, which hermetically seals pi review runs off from the host's development-flavoured pi configuration — no extension discovery or execution (extensions are how MCP servers arrive in pi), no skills or prompt templates, the reviewed checkout forced untrusted regardless of pi's trust store, and startup network operations disabled. Previously this required `extra_args` in the reviewer config; it's now unconditional in the adapter.
 
-CHANGE: `terminus rubrics` now shows each rubric's composed qualities and whether
-each blocks, not just the rubric names — so an operator can see what a review will
-apply, and which tier each quality comes from, without opening the canon.
+CHANGE: `terminus rubrics` now shows each rubric's composed qualities and whether each blocks, not just the rubric names — so an operator can see what a review will apply, and which tier each quality comes from, without opening the canon.
 
 ## v0.1.1
 
-CHANGE: Persist Terminus's own review artifacts through the shared `df/dd` binding
-substrate, so Terminus follows the `df-binding` convention it enforces. `status.json`
-and `result.json` now marshal and unmarshal via `dd` instead of `encoding/json`; the
-reviewer's raw output passes through a `json.RawMessage` converter untouched, and the
-round-tripped values are preserved. On-disk keys are now sorted and previously-omitted
-empty fields appear, but the MCP/CLI wire format is unchanged.
+CHANGE: Persist Terminus's own review artifacts through the shared `df/dd` binding substrate, so Terminus follows the `df-binding` convention it enforces. `status.json` and `result.json` now marshal and unmarshal via `dd` instead of `encoding/json`; the reviewer's raw output passes through a `json.RawMessage` converter untouched, and the round-tripped values are preserved. On-disk keys are now sorted and previously-omitted empty fields appear, but the MCP/CLI wire format is unchanged.
 
-FIX: Lowercase the reviewer's triage guidance strings so they follow the
-`lowercase-output` convention.
+FIX: Lowercase the reviewer's triage guidance strings so they follow the `lowercase-output` convention.
 
-FEATURE: Ad-hoc reviews — `terminus review --quality <ref>` (repeatable) and the MCP
-`start_review` `qualities` field review against canon quality refs directly, bypassing
-rubric resolution. Useful for trying a quality or reviewing a project with no rubric
-yet; no rubric file and no `project.repo` check are required. Ad-hoc qualities are
-advisory unless `--blocking` / `qualities_blocking` is set, the recorded rubric is
-`(ad-hoc)`, and `--quality` cannot be combined with `--rubric`.
+FEATURE: Ad-hoc reviews — `terminus review --quality <ref>` (repeatable) and the MCP `start_review` `qualities` field review against canon quality refs directly, bypassing rubric resolution. Useful for trying a quality or reviewing a project with no rubric yet; no rubric file and no `project.repo` check are required. Ad-hoc qualities are advisory unless `--blocking` / `qualities_blocking` is set, the recorded rubric is `(ad-hoc)`, and `--quality` cannot be combined with `--rubric`.
 
 ## v0.1.0
 
-FEATURE: Terminus review spine — a local MCP code-review broker. It points a
-fresh-context reviewer (`pi`, `codex`, or `claude` via `theharnessbody`) at a repo
-and review target, judges the code against a central canon of qualities selected
-by a project rubric, and returns a structured `clean`/`not_clean` verdict. The
-target (working-tree changes, paths, or the full tracked repo) is a set of
-starting points, not a fence: the reviewer follows a change outward and files
-findings wherever the problem lives. Qualities are self-contained markdown with
-strict frontmatter (`id`, `applies_to`, `territory`); rubric-derived blocking
-drives the verdict; runs are backgrounded, monitorable via status files, and
-recorded immutably outside the subject repo through `theharnessbody/record`.
+FEATURE: Terminus review spine — a local MCP code-review broker. It points a fresh-context reviewer (`pi`, `codex`, or `claude` via `theharnessbody`) at a repo and review target, judges the code against a central canon of qualities selected by a project rubric, and returns a structured `clean`/`not_clean` verdict. The target (working-tree changes, paths, or the full tracked repo) is a set of starting points, not a fence: the reviewer follows a change outward and files findings wherever the problem lives. Qualities are self-contained markdown with strict frontmatter (`id`, `applies_to`, `territory`); rubric-derived blocking drives the verdict; runs are backgrounded, monitorable via status files, and recorded immutably outside the subject repo through `theharnessbody/record`.
 
-FEATURE: Reviewer prompt steers the reviewer to each quality's own
-`discrimination`/`boundary` calibration, prefers fewer material findings (zero is
-a valid result), sizes fixes conservatively, and states the output constraints
-that otherwise fail a whole review (unique finding ids, selected quality ids,
-null-not-empty `suggestion`).
+FEATURE: Reviewer prompt steers the reviewer to each quality's own `discrimination`/`boundary` calibration, prefers fewer material findings (zero is a valid result), sizes fixes conservatively, and states the output constraints that otherwise fail a whole review (unique finding ids, selected quality ids, null-not-empty `suggestion`).
 
-FEATURE: Named rubrics per project — `projects/<project>/<name>.yaml`, default
-`rubric.yaml`, selected with `terminus review --rubric <name>` or the MCP
-`start_review` `rubric` field, and listed with `terminus rubrics`. Blocking is
-per-rubric; the selected rubric is recorded in `status.json`/`result.json`.
-Rubrics are independent hand-authored lists; include/compose is deferred.
+FEATURE: Named rubrics per project — `projects/<project>/<name>.yaml`, default `rubric.yaml`, selected with `terminus review --rubric <name>` or the MCP `start_review` `rubric` field, and listed with `terminus rubrics`. Blocking is per-rubric; the selected rubric is recorded in `status.json`/`result.json`. Rubrics are independent hand-authored lists; include/compose is deferred.
 
-FEATURE: CLI surface — `terminus serve` (stdio MCP server), `terminus review`
-(foreground review; a clean working tree under the default `--kind` promotes to a
-full review), `terminus rubrics`, `terminus monitor`, and `terminus version`. Bare
-`terminus` prints command help. Non-clean reviews are successful executions; only
-operational failures return non-zero.
+FEATURE: CLI surface — `terminus serve` (stdio MCP server), `terminus review` (foreground review; a clean working tree under the default `--kind` promotes to a full review), `terminus rubrics`, `terminus monitor`, and `terminus version`. Bare `terminus` prints command help. Non-clean reviews are successful executions; only operational failures return non-zero.
 
-FEATURE: CI build integration via the shared `push` framework — the workflow vets,
-tests, builds a stamped linux-amd64 binary with `push/ci/ldflags.sh`, verifies
-`terminus version` is stamped, uploads an artifact, and drafts a release on `v*`
-tags.
+FEATURE: CI build integration via the shared `push` framework — the workflow vets, tests, builds a stamped linux-amd64 binary with `push/ci/ldflags.sh`, verifies `terminus version` is stamped, uploads an artifact, and drafts a release on `v*` tags.
