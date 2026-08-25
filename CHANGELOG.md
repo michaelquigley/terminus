@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+FEATURE: Reviews report the qualities territory narrowing excluded, so a `clean` verdict is honest about how much of the rubric it covered. `result.json` and `collect_review` now carry `qualities_selected` and `excluded_qualities` (id, ref, blocking), and `terminus review` prints a one-line summary naming the excluded blocking qualities — flagging explicitly when every rubric quality was excluded and the verdict covered nothing. This closes the Sterling stage-1 failure mode, where all seven project invariants were silently excluded by territory and the review reported a vacuous clean.
+
+CHANGE: Explicit quality selection (`--quality`, the MCP `qualities` field) now bypasses territory narrowing — a quality a human names by hand is reviewed even when its territory matches no starting-point file, so an explicit override can no longer be filtered out of the review it names.
+
 ## v0.1.3
 
 CHANGE: The two remaining project-data JSON paths outside df/dd now conform to the df-binding quality, surfaced by the first full-repo terminus self-review: `findings.Parse` binds reviewer output through `dd.BindJSON` (with `suggestion` tagged `+nullable`, since the findings schema makes it required-and-nullable by design), and the `_findings.md` classified block unbinds each finding through `dd.Unbind` before rendering, so its keys are now sorted. Requires df v1.0.3 for JSON null support.

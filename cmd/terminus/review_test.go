@@ -256,6 +256,146 @@ func TestReviewAdHocBlocking(t *testing.T) {
 	}
 }
 
+// a canon whose rubric lists a quality whose territory reaches no
+// starting-point file, so a working-tree review of main.go excludes it.
+func cmdScopedCanon(t *testing.T, project string) string {
+	t.Helper()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go-conventions", "df-logging.md"), `---
+id: df-logging
+territory:
+  - "**/*.go"
+---
+# df logging
+`)
+	writeFile(t, filepath.Join(root, "go-conventions", "cmd-only.md"), `---
+id: cmd-only
+territory:
+  - "cmd/"
+---
+# cmd only
+`)
+	writeFile(t, filepath.Join(root, "projects", project, "rubric.yaml"), fmt.Sprintf(`project:
+  repo: %q
+qualities:
+  - ref: go-conventions/df-logging
+    blocking: true
+  - ref: go-conventions/cmd-only
+    blocking: true
+`, project))
+	return root
+}
+
+func TestReviewReportsTerritoryExcludedQualities(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+
+	canonRoot := cmdScopedCanon(t, filepath.Base(repo))
+	logDir := t.TempDir()
+	configPath := filepath.Join(t.TempDir(), "terminus.yaml")
+	writeFile(t, configPath, fmt.Sprintf(`canon_path: %q
+log_destination: %q
+reviewer:
+  name: dummy
+  impl: dummy
+`, canonRoot, logDir))
+
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--config", configPath, "review", "--repo", repo})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("review command failed: %v\n%s", err, out.String())
+	}
+	text := out.String()
+	for _, want := range []string{"verdict: clean", "qualities: 1 of 2 in scope; 1 excluded by territory: go-conventions/cmd-only"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("output missing %q\n%s", want, text)
+		}
+	}
+}
+
+// the zero-coverage case: every rubric quality is excluded by territory, so
+// the vacuous clean verdict must say it covered nothing.
+func TestReviewReportsAllQualitiesExcluded(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go-conventions", "cmd-only.md"), `---
+id: cmd-only
+territory:
+  - "cmd/"
+---
+# cmd only
+`)
+	writeFile(t, filepath.Join(root, "projects", filepath.Base(repo), "rubric.yaml"),
+		fmt.Sprintf("project:\n  repo: %q\nqualities:\n  - ref: go-conventions/cmd-only\n    blocking: true\n", filepath.Base(repo)))
+	logDir := t.TempDir()
+	configPath := filepath.Join(t.TempDir(), "terminus.yaml")
+	writeFile(t, configPath, fmt.Sprintf(`canon_path: %q
+log_destination: %q
+reviewer:
+  name: dummy
+  impl: dummy
+`, root, logDir))
+
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--config", configPath, "review", "--repo", repo})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("review command failed: %v\n%s", err, out.String())
+	}
+	if want := "qualities: 0 of 1 in scope — all rubric qualities excluded by territory: go-conventions/cmd-only"; !strings.Contains(out.String(), want) {
+		t.Fatalf("output missing %q\n%s", want, out.String())
+	}
+}
+
+// an explicitly named quality bypasses territory narrowing, so a human can
+// still ask the question the filter would have answered no.
+func TestReviewAdHocBypassesTerritory(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+
+	canonRoot := cmdScopedCanon(t, filepath.Base(repo))
+	logDir := t.TempDir()
+	configPath := filepath.Join(t.TempDir(), "terminus.yaml")
+	writeFile(t, configPath, fmt.Sprintf(`canon_path: %q
+log_destination: %q
+reviewer:
+  name: dummy
+  impl: dummy
+`, canonRoot, logDir))
+
+	cmd := newRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--config", configPath, "review", "--repo", repo, "--quality", "go-conventions/cmd-only"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("ad-hoc review failed: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "excluded by territory") {
+		t.Fatalf("explicit --quality must not be excluded by territory:\n%s", out.String())
+	}
+	status := readSingleStatus(t, logDir, filepath.Base(repo))
+	if len(status.Qualities) != 1 || status.Qualities[0].ID != "cmd-only" {
+		t.Fatalf("expected the named quality to be selected despite territory, got %#v", status.Qualities)
+	}
+}
+
 func TestReviewBlockingRequiresQuality(t *testing.T) {
 	cmd := newRootCommand()
 	var out bytes.Buffer

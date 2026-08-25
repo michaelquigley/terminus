@@ -1,4 +1,5 @@
 horizon:
-  - report-excluded-qualities.md
+researching:
   - multiple-review-passes.md
   - grouped-reviews.md
+building:

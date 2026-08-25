@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/michaelquigley/terminus/internal/broker"
@@ -142,6 +143,7 @@ func printReviewResult(cmd *cobra.Command, result broker.CollectReviewResponse) 
 		fmt.Fprintf(out, "reviewer: %s\n", result.ReviewerName)
 	}
 	fmt.Fprintf(out, "findings: %d blocking, %d advisory\n", blocking, advisory)
+	printExcludedQualities(out, result)
 	if result.PromptPath != "" {
 		fmt.Fprintf(out, "prompt: %s\n", result.PromptPath)
 	}
@@ -174,4 +176,55 @@ func findingCounts(findings []broker.TriageFindingOutput) (blocking int, advisor
 		}
 	}
 	return blocking, advisory
+}
+
+// printExcludedQualities reports the rubric qualities territory narrowing
+// dropped from the review, so a clean verdict is honest about how much it
+// covered; it prints nothing when nothing was excluded.
+func printExcludedQualities(out io.Writer, result broker.CollectReviewResponse) {
+	n := len(result.ExcludedQualities)
+	if n == 0 {
+		return
+	}
+	total := result.QualitiesSelected + n
+	if result.QualitiesSelected == 0 {
+		fmt.Fprintf(out, "qualities: 0 of %d in scope — all rubric qualities excluded by territory: %s\n", total, strings.Join(qualityRefs(result.ExcludedQualities), ", "))
+		return
+	}
+	line := fmt.Sprintf("qualities: %d of %d in scope; %d excluded by territory", result.QualitiesSelected, total, n)
+	if refs := blockingQualityRefs(result.ExcludedQualities); len(refs) > 0 {
+		line += ": " + strings.Join(refs, ", ")
+	}
+	if refs := advisoryQualityRefs(result.ExcludedQualities); len(refs) > 0 {
+		line += fmt.Sprintf(" (+%d advisory)", len(refs))
+	}
+	fmt.Fprintln(out, line)
+}
+
+func qualityRefs(qualities []broker.ExcludedQuality) []string {
+	refs := make([]string, 0, len(qualities))
+	for _, q := range qualities {
+		refs = append(refs, q.Ref)
+	}
+	return refs
+}
+
+func blockingQualityRefs(qualities []broker.ExcludedQuality) []string {
+	var refs []string
+	for _, q := range qualities {
+		if q.Blocking {
+			refs = append(refs, q.Ref)
+		}
+	}
+	return refs
+}
+
+func advisoryQualityRefs(qualities []broker.ExcludedQuality) []string {
+	var refs []string
+	for _, q := range qualities {
+		if !q.Blocking {
+			refs = append(refs, q.Ref)
+		}
+	}
+	return refs
 }

@@ -50,6 +50,8 @@ A project may carry multiple named rubrics, each a different subset of the canon
 
 Selection has two stages. `Compose` loads every quality listed in the project rubric. `Narrow` intersects that set with the starting-point files using each quality's `territory`. Territory patterns are slash-path globs with recursive `**`; `**/*.go` matches both `main.go` and `internal/x.go`, and a trailing slash such as `cmd/` means `cmd/**`. A quality with no territory always applies.
 
+`Narrow` reports both sides of that split. A rubric-listed quality whose territory reaches no starting-point file is excluded from the review and is reported with the verdict: `result.json` and the collect response carry `qualities_selected` and the excluded quality refs (id, ref, blocking), and the CLI prints a one-line summary. This keeps a `clean` verdict honest about how much of the rubric it covered — a review that silently dropped the whole rubric would otherwise be indistinguishable from a clean one. An ad-hoc review (`--quality` or the `qualities` field) bypasses territory entirely: a quality a human names by hand is selected even when its territory matches no starting-point file.
+
 ## Changesets
 
 `working-tree` uses the harness `repo` package to read git status and `git diff HEAD`. The file set includes modified, added, deleted, and untracked files. Untracked files are among the starting points but not in the diff.
@@ -95,7 +97,7 @@ terminus review --repo ../terminus --kind full
 terminus review --kind paths internal/canon cmd/terminus
 ```
 
-`--repo` defaults to `.`, `--kind` defaults to `working-tree`, `--rubric` defaults to `rubric` (the project's `rubric.yaml`), and path arguments are only valid with `--kind paths`. The command writes the same review artifacts as MCP review startup, waits for the reviewer to finish, then prints the verdict, finding counts, prompt path, findings log path, and a compact finding list. A `not_clean` result is still a successful command execution; process failure is reserved for operational errors.
+`--repo` defaults to `.`, `--kind` defaults to `working-tree`, `--rubric` defaults to `rubric` (the project's `rubric.yaml`), and path arguments are only valid with `--kind paths`. The command writes the same review artifacts as MCP review startup, waits for the reviewer to finish, then prints the verdict, finding counts, prompt path, findings log path, and a compact finding list. When territory narrowing excludes rubric-listed qualities it prints a one-line scope summary — `qualities: 2 of 5 in scope; 3 excluded by territory: ref1, ref2` — naming the excluded blocking qualities; when every rubric quality is excluded the line says so explicitly, so a `clean` verdict cannot read as full coverage. A `not_clean` result is still a successful command execution; process failure is reserved for operational errors.
 
 `--quality <ref>` (repeatable) runs an ad-hoc review against the given canon quality refs directly, bypassing rubric resolution — useful for trying a quality, or reviewing a project that has no rubric yet. It needs no rubric file and does not check `project.repo`; the project is still the repo basename. Ad-hoc qualities are advisory unless `--blocking` is passed; the recorded rubric is `(ad-hoc)`. `--quality` and `--rubric` cannot be combined.
 
@@ -107,6 +109,6 @@ When `--kind` is left at its default and the working tree is clean, the command 
 
 `start_review` takes `repo_path`, `changeset_kind` (`working-tree`, `paths`, or `full`), optional `paths`, and an optional `rubric` name (defaulting to `rubric`). It resolves the named project rubric, narrows the qualities, writes `_prompt.md`, starts the reviewer in the background, and returns a `review_id` plus a monitor command. The selected rubric is recorded in `status.json` and `result.json`. An optional `qualities` list reviews against those canon quality refs directly, bypassing the rubric (an ad-hoc review); it takes precedence over `rubric`, and `qualities_blocking` makes them blocking (advisory by default).
 
-`collect_review` returns a completed review when given `review_id`; if omitted, it lists known review runs. A running review returns `conflict`.
+`collect_review` returns a completed review when given `review_id`; if omitted, it lists known review runs. A running review returns `conflict`. The result carries `qualities_selected` and, when territory dropped rubric-listed qualities, `excluded_qualities` (id, ref, blocking), so an agent can see how much of the rubric the verdict actually covered.
 
 The CLI also exposes `terminus monitor --project <project> --wait <review_id>` for polling `status.json`.

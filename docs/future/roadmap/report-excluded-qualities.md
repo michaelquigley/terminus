@@ -1,6 +1,6 @@
 ---
 title: report excluded qualities
-state: horizon
+state: evaluating
 created: 2026-08-12
 tags: [enhancement]
 milestone: v0.1.x

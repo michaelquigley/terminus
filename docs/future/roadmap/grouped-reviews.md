@@ -1,6 +1,6 @@
 ---
 title: grouped reviews
-state: horizon
+state: researching
 created: 2026-08-12
 tags: [epic, spike]
 milestone: v0.1.x

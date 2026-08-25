@@ -1,6 +1,6 @@
 ---
 title: multiple review passes
-state: horizon
+state: researching
 created: 2026-08-25
 tags: [epic, spike]
 milestone: v0.1.x

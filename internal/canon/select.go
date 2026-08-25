@@ -35,19 +35,19 @@ func Compose(store *Store, r Rubric) ([]Selected, error) {
 	return selected, nil
 }
 
-func Narrow(composed []Selected, changedFiles []string) []Selected {
+// Narrow splits the composed qualities into those whose territory reaches at
+// least one starting-point file (selected) and the ones it does not
+// (excluded); a quality with no territory always applies.
+func Narrow(composed []Selected, changedFiles []string) (selected, excluded []Selected) {
 	files := normalizeFiles(changedFiles)
-	out := make([]Selected, 0, len(composed))
 	for _, s := range composed {
-		if len(s.Quality.Head.Territory) == 0 {
-			out = append(out, s)
+		if len(s.Quality.Head.Territory) == 0 || territoryMatchesAny(s.Quality.Head.Territory, files) {
+			selected = append(selected, s)
 			continue
 		}
-		if territoryMatchesAny(s.Quality.Head.Territory, files) {
-			out = append(out, s)
-		}
+		excluded = append(excluded, s)
 	}
-	return out
+	return selected, excluded
 }
 
 func ValidateTerritory(pattern string) error {

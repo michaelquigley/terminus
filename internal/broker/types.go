@@ -66,20 +66,31 @@ type ReviewSummary struct {
 }
 
 type CollectReviewResponse struct {
-	ReviewID     string                `json:"review_id"`
-	Project      string                `json:"project"`
-	Rubric       string                `json:"rubric,omitempty"`
-	State        string                `json:"state"`
-	Verdict      string                `json:"verdict"`
-	Clean        bool                  `json:"clean"`
-	Summary      string                `json:"summary"`
-	LogPath      string                `json:"log_path"`
-	PromptPath   string                `json:"prompt_path"`
-	ReviewerName string                `json:"reviewer_name"`
-	Raw          json.RawMessage       `json:"raw"`
-	Findings     []TriageFindingOutput `json:"findings"`
-	NextFinding  *TriageFindingOutput  `json:"next_finding,omitempty"`
-	Guidance     string                `json:"guidance"`
+	ReviewID          string                `json:"review_id"`
+	Project           string                `json:"project"`
+	Rubric            string                `json:"rubric,omitempty"`
+	QualitiesSelected int                   `json:"qualities_selected"`
+	ExcludedQualities []ExcludedQuality     `json:"excluded_qualities,omitempty"`
+	State             string                `json:"state"`
+	Verdict           string                `json:"verdict"`
+	Clean             bool                  `json:"clean"`
+	Summary           string                `json:"summary"`
+	LogPath           string                `json:"log_path"`
+	PromptPath        string                `json:"prompt_path"`
+	ReviewerName      string                `json:"reviewer_name"`
+	Raw               json.RawMessage       `json:"raw"`
+	Findings          []TriageFindingOutput `json:"findings"`
+	NextFinding       *TriageFindingOutput  `json:"next_finding,omitempty"`
+	Guidance          string                `json:"guidance"`
+}
+
+// ExcludedQuality records a rubric-listed quality that territory narrowing
+// dropped from a review, so a verdict stays honest about how much of the
+// rubric it actually covered.
+type ExcludedQuality struct {
+	ID       string `json:"id"`
+	Ref      string `json:"ref"`
+	Blocking bool   `json:"blocking"`
 }
 
 type TriageFindingOutput struct {
@@ -94,18 +105,20 @@ type TriageFindingOutput struct {
 }
 
 type reviewResultFile struct {
-	ReviewID     string                `json:"review_id"`
-	Project      string                `json:"project"`
-	Rubric       string                `json:"rubric,omitempty"`
-	State        string                `json:"state"`
-	Verdict      string                `json:"verdict"`
-	Clean        bool                  `json:"clean"`
-	Summary      string                `json:"summary"`
-	LogPath      string                `json:"log_path"`
-	PromptPath   string                `json:"prompt_path"`
-	ReviewerName string                `json:"reviewer_name"`
-	Raw          json.RawMessage       `json:"raw"`
-	Findings     []TriageFindingOutput `json:"findings"`
+	ReviewID          string                `json:"review_id"`
+	Project           string                `json:"project"`
+	Rubric            string                `json:"rubric,omitempty"`
+	QualitiesSelected int                   `json:"qualities_selected"`
+	ExcludedQualities []ExcludedQuality     `json:"excluded_qualities,omitempty"`
+	State             string                `json:"state"`
+	Verdict           string                `json:"verdict"`
+	Clean             bool                  `json:"clean"`
+	Summary           string                `json:"summary"`
+	LogPath           string                `json:"log_path"`
+	PromptPath        string                `json:"prompt_path"`
+	ReviewerName      string                `json:"reviewer_name"`
+	Raw               json.RawMessage       `json:"raw"`
+	Findings          []TriageFindingOutput `json:"findings"`
 }
 
 func classifiedToTriage(classified []findings.Classified) []TriageFindingOutput {

@@ -35,14 +35,19 @@ func TestComposeAndNarrow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	selected := Narrow(composed, []string{"main.go"})
+	selected, excluded := Narrow(composed, []string{"main.go"})
 	assertIDs(t, selected, "df-logging", "project-wide")
+	assertIDs(t, excluded, "cli-quality")
 
-	selected = Narrow(composed, []string{"internal/foo/bar.go"})
+	selected, excluded = Narrow(composed, []string{"internal/foo/bar.go"})
 	assertIDs(t, selected, "df-logging", "project-wide")
+	assertIDs(t, excluded, "cli-quality")
 
-	selected = Narrow(composed, []string{"cmd/main.go"})
+	selected, excluded = Narrow(composed, []string{"cmd/main.go"})
 	assertIDs(t, selected, "df-logging", "cli-quality", "project-wide")
+	if len(excluded) != 0 {
+		t.Fatalf("expected no excluded qualities, got %#v", excluded)
+	}
 }
 
 func TestComposeDuplicateIDFails(t *testing.T) {

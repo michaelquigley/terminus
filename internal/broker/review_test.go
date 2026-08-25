@@ -139,6 +139,110 @@ func TestCollectFromDiskRoundTrip(t *testing.T) {
 	}
 }
 
+// a canon whose rubric lists a quality whose territory reaches no
+// starting-point file, so territory narrowing excludes it from the review.
+func cmdScopedCanon(t *testing.T, project string) string {
+	t.Helper()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go-conventions", "df-logging.md"), `---
+id: df-logging
+territory:
+  - "**/*.go"
+---
+# df logging
+`)
+	writeFile(t, filepath.Join(root, "go-conventions", "cmd-only.md"), `---
+id: cmd-only
+territory:
+  - "cmd/"
+---
+# cmd only
+`)
+	writeFile(t, filepath.Join(root, "projects", project, "rubric.yaml"), fmt.Sprintf(`project:
+  repo: %q
+qualities:
+  - ref: go-conventions/df-logging
+    blocking: true
+  - ref: go-conventions/cmd-only
+    blocking: true
+`, project))
+	return root
+}
+
+// guards the territory-exclusion reporting: a rubric quality whose territory
+// reaches no starting-point file is dropped from the review but named in the
+// result, so a clean verdict is honest about how much of the rubric it
+// covered — and the fields survive the result.json round-trip.
+func TestBrokerReportsTerritoryExcludedQualities(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+
+	canonRoot := cmdScopedCanon(t, filepath.Base(repo))
+	opts := Options{
+		LogDestination: t.TempDir(),
+		CanonPath:      canonRoot,
+		Reviewer:       dummy.New(dummy.Options{Raw: json.RawMessage(`{"summary":"clean","findings":[]}`)}),
+		ReviewerInfo:   ReviewerInfo{Name: "dummy", Impl: "dummy"},
+	}
+
+	live, err := New(opts).RunReview(context.Background(), StartReviewRequest{RepoPath: repo, ChangesetKind: changeset.KindWorkingTree})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live.QualitiesSelected != 1 {
+		t.Fatalf("expected 1 selected quality, got %d", live.QualitiesSelected)
+	}
+	if len(live.ExcludedQualities) != 1 || live.ExcludedQualities[0].ID != "cmd-only" || !live.ExcludedQualities[0].Blocking {
+		t.Fatalf("unexpected excluded qualities: %#v", live.ExcludedQualities)
+	}
+
+	// a second broker reads from disk, so the fields must survive result.json.
+	got, err := New(opts).CollectReview(context.Background(), CollectReviewRequest{Project: live.Project, ReviewID: live.ReviewID})
+	if err != nil {
+		t.Fatalf("collect from disk: %v", err)
+	}
+	if got.QualitiesSelected != live.QualitiesSelected || !reflect.DeepEqual(got.ExcludedQualities, live.ExcludedQualities) {
+		t.Fatalf("exclusion fields drifted through disk:\n got:  %d %#v\n live: %d %#v", got.QualitiesSelected, got.ExcludedQualities, live.QualitiesSelected, live.ExcludedQualities)
+	}
+}
+
+// an explicitly named quality bypasses territory narrowing: a human naming it
+// by hand has already made the judgment the filter automates, so the review
+// runs it even when its territory matches no starting-point file.
+func TestBrokerAdHocBypassesTerritory(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
+
+	canonRoot := cmdScopedCanon(t, filepath.Base(repo))
+	b := New(Options{
+		LogDestination: t.TempDir(),
+		CanonPath:      canonRoot,
+		Reviewer:       dummy.New(dummy.Options{Raw: json.RawMessage(`{"summary":"clean","findings":[]}`)}),
+		ReviewerInfo:   ReviewerInfo{Name: "dummy", Impl: "dummy"},
+	})
+
+	result, err := b.RunReview(context.Background(), StartReviewRequest{
+		RepoPath:      repo,
+		ChangesetKind: changeset.KindWorkingTree,
+		Qualities:     []string{"go-conventions/cmd-only"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.QualitiesSelected != 1 {
+		t.Fatalf("expected the named quality to be selected despite territory, got %d selected", result.QualitiesSelected)
+	}
+	if len(result.ExcludedQualities) != 0 {
+		t.Fatalf("expected no excluded qualities in an ad-hoc review, got %#v", result.ExcludedQualities)
+	}
+}
+
 func collectEventually(t *testing.T, b *Broker, req CollectReviewRequest) CollectReviewResponse {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

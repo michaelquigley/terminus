@@ -53,6 +53,7 @@ type reviewJob struct {
 	startedAt    time.Time
 	changeset    changeset.Changeset
 	selected     []canon.Selected
+	excluded     []canon.Selected
 	reviewer     reviewer.Reviewer
 	reviewerName string
 	done         chan struct{}
@@ -144,7 +145,14 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 	if err != nil {
 		return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "compose rubric", err, nil)
 	}
-	selected := canon.Narrow(composed, cs.Files)
+	var selected, excluded []canon.Selected
+	if len(req.Qualities) > 0 {
+		// an explicitly named quality bypasses territory narrowing: a human
+		// naming it by hand has already made the judgment the filter automates.
+		selected = composed
+	} else {
+		selected, excluded = canon.Narrow(composed, cs.Files)
+	}
 
 	id, err := newReviewID()
 	if err != nil {
@@ -178,6 +186,7 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 		startedAt:    startedAt,
 		changeset:    cs,
 		selected:     cloneSelected(selected),
+		excluded:     cloneSelected(excluded),
 		reviewer:     b.options.Reviewer,
 		reviewerName: b.options.ReviewerInfo.Name,
 		done:         make(chan struct{}),
@@ -249,19 +258,21 @@ func (b *Broker) execute(ctx context.Context, job *reviewJob, promptText string)
 	}
 	triage := orderTriage(classified)
 	result := CollectReviewResponse{
-		ReviewID:     job.id,
-		Project:      job.project,
-		Rubric:       job.rubric,
-		State:        monitor.StateCompleted,
-		Verdict:      verdict,
-		Clean:        clean,
-		Summary:      output.Summary,
-		LogPath:      job.logPath,
-		PromptPath:   job.promptPath,
-		ReviewerName: job.reviewerName,
-		Raw:          append(json.RawMessage(nil), resp.Raw...),
-		Findings:     triage,
-		Guidance:     triageGuidance(triage),
+		ReviewID:          job.id,
+		Project:           job.project,
+		Rubric:            job.rubric,
+		QualitiesSelected: len(job.selected),
+		ExcludedQualities: excludedQualityInfos(job.excluded),
+		State:             monitor.StateCompleted,
+		Verdict:           verdict,
+		Clean:             clean,
+		Summary:           output.Summary,
+		LogPath:           job.logPath,
+		PromptPath:        job.promptPath,
+		ReviewerName:      job.reviewerName,
+		Raw:               append(json.RawMessage(nil), resp.Raw...),
+		Findings:          triage,
+		Guidance:          triageGuidance(triage),
 	}
 	if len(triage) > 0 {
 		next := triage[0]
@@ -464,6 +475,18 @@ func monitorQualities(selected []canon.Selected) []monitor.QualityInfo {
 	return out
 }
 
+func excludedQualityInfos(excluded []canon.Selected) []ExcludedQuality {
+	out := make([]ExcludedQuality, 0, len(excluded))
+	for _, s := range excluded {
+		out = append(out, ExcludedQuality{
+			ID:       s.Quality.Head.ID,
+			Ref:      s.Quality.Ref,
+			Blocking: s.Blocking,
+		})
+	}
+	return out
+}
+
 func jobKey(project string, reviewID string) string {
 	return project + "/" + reviewID
 }
@@ -509,18 +532,20 @@ func triageGuidance(findings []TriageFindingOutput) string {
 
 func writeResult(path string, result CollectReviewResponse) error {
 	file := reviewResultFile{
-		ReviewID:     result.ReviewID,
-		Project:      result.Project,
-		Rubric:       result.Rubric,
-		State:        result.State,
-		Verdict:      result.Verdict,
-		Clean:        result.Clean,
-		Summary:      result.Summary,
-		LogPath:      result.LogPath,
-		PromptPath:   result.PromptPath,
-		ReviewerName: result.ReviewerName,
-		Raw:          append(json.RawMessage(nil), result.Raw...),
-		Findings:     append([]TriageFindingOutput(nil), result.Findings...),
+		ReviewID:          result.ReviewID,
+		Project:           result.Project,
+		Rubric:            result.Rubric,
+		QualitiesSelected: result.QualitiesSelected,
+		ExcludedQualities: append([]ExcludedQuality(nil), result.ExcludedQualities...),
+		State:             result.State,
+		Verdict:           result.Verdict,
+		Clean:             result.Clean,
+		Summary:           result.Summary,
+		LogPath:           result.LogPath,
+		PromptPath:        result.PromptPath,
+		ReviewerName:      result.ReviewerName,
+		Raw:               append(json.RawMessage(nil), result.Raw...),
+		Findings:          append([]TriageFindingOutput(nil), result.Findings...),
 	}
 	return writeJSONAtomic(path, file)
 }
@@ -611,19 +636,21 @@ func projectDirs(logDestination string, project string) ([]string, error) {
 
 func collectFromStored(stored reviewResultFile) CollectReviewResponse {
 	resp := CollectReviewResponse{
-		ReviewID:     stored.ReviewID,
-		Project:      stored.Project,
-		Rubric:       stored.Rubric,
-		State:        stored.State,
-		Verdict:      stored.Verdict,
-		Clean:        stored.Clean,
-		Summary:      stored.Summary,
-		LogPath:      stored.LogPath,
-		PromptPath:   stored.PromptPath,
-		ReviewerName: stored.ReviewerName,
-		Raw:          append(json.RawMessage(nil), stored.Raw...),
-		Findings:     append([]TriageFindingOutput(nil), stored.Findings...),
-		Guidance:     triageGuidance(stored.Findings),
+		ReviewID:          stored.ReviewID,
+		Project:           stored.Project,
+		Rubric:            stored.Rubric,
+		QualitiesSelected: stored.QualitiesSelected,
+		ExcludedQualities: append([]ExcludedQuality(nil), stored.ExcludedQualities...),
+		State:             stored.State,
+		Verdict:           stored.Verdict,
+		Clean:             stored.Clean,
+		Summary:           stored.Summary,
+		LogPath:           stored.LogPath,
+		PromptPath:        stored.PromptPath,
+		ReviewerName:      stored.ReviewerName,
+		Raw:               append(json.RawMessage(nil), stored.Raw...),
+		Findings:          append([]TriageFindingOutput(nil), stored.Findings...),
+		Guidance:          triageGuidance(stored.Findings),
 	}
 	if len(resp.Findings) > 0 {
 		next := resp.Findings[0]
@@ -636,6 +663,7 @@ func cloneCollectReviewResponse(in CollectReviewResponse) CollectReviewResponse 
 	out := in
 	out.Raw = append(json.RawMessage(nil), in.Raw...)
 	out.Findings = append([]TriageFindingOutput(nil), in.Findings...)
+	out.ExcludedQualities = append([]ExcludedQuality(nil), in.ExcludedQualities...)
 	if in.NextFinding != nil {
 		next := *in.NextFinding
 		out.NextFinding = &next
