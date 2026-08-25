@@ -317,6 +317,15 @@ reviewer:
 			t.Fatalf("output missing %q\n%s", want, text)
 		}
 	}
+	// the excluded set is in status.json from the review's first write, so a
+	// running review's scope is visible before the verdict lands.
+	status := readSingleStatus(t, logDir, filepath.Base(repo))
+	if len(status.ExcludedQualities) != 1 || status.ExcludedQualities[0].ID != "cmd-only" || !status.ExcludedQualities[0].Blocking {
+		t.Fatalf("expected cmd-only in status excluded qualities, got %#v", status.ExcludedQualities)
+	}
+	if len(status.Qualities) != 1 || status.Qualities[0].ID != "df-logging" {
+		t.Fatalf("expected df-logging selected in status, got %#v", status.Qualities)
+	}
 }
 
 // the zero-coverage case: every rubric quality is excluded by territory, so
@@ -358,6 +367,13 @@ reviewer:
 	if want := "qualities: 0 of 1 in scope — all rubric qualities excluded by territory: go-conventions/cmd-only"; !strings.Contains(out.String(), want) {
 		t.Fatalf("output missing %q\n%s", want, out.String())
 	}
+	status := readSingleStatus(t, logDir, filepath.Base(repo))
+	if len(status.ExcludedQualities) != 1 || status.ExcludedQualities[0].ID != "cmd-only" {
+		t.Fatalf("expected the excluded quality in status, got %#v", status.ExcludedQualities)
+	}
+	if len(status.Qualities) != 0 {
+		t.Fatalf("expected no selected qualities in status, got %#v", status.Qualities)
+	}
 }
 
 // an explicitly named quality bypasses territory narrowing, so a human can
@@ -393,6 +409,9 @@ reviewer:
 	status := readSingleStatus(t, logDir, filepath.Base(repo))
 	if len(status.Qualities) != 1 || status.Qualities[0].ID != "cmd-only" {
 		t.Fatalf("expected the named quality to be selected despite territory, got %#v", status.Qualities)
+	}
+	if len(status.ExcludedQualities) != 0 {
+		t.Fatalf("expected no excluded qualities in status for an ad-hoc review, got %#v", status.ExcludedQualities)
 	}
 }
 

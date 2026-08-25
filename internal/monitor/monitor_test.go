@@ -10,24 +10,25 @@ import (
 
 // guards the dd migration of status.json: a fully-populated ReviewStatus must
 // survive WriteStatus -> ReadStatus unchanged, including the nested reviewer
-// info, error detail, file list, and selected qualities.
+// info, error detail, file list, selected qualities, and excluded qualities.
 func TestStatusRoundTrip(t *testing.T) {
 	path := StatusPath(t.TempDir())
 	in := ReviewStatus{
-		ReviewID:      "abc123",
-		Project:       "demo",
-		Rubric:        "rubric",
-		State:         StateCompleted,
-		ChangesetKind: "full",
-		Reviewer:      ReviewerInfo{Name: "pi", Impl: "pi", Model: "m"},
-		StartedAt:     "2026-06-30T00:00:00Z",
-		UpdatedAt:     "2026-06-30T00:00:05Z",
-		CompletedAt:   "2026-06-30T00:00:05Z",
-		StatusPath:    path,
-		LogPath:       "log.md",
-		Error:         &errs.Info{Code: "user_error", Message: "bad input", Details: map[string]any{"key": "value"}, At: "2026-06-30T00:00:01Z"},
-		Files:         []string{"main.go", "internal/x.go"},
-		Qualities:     []QualityInfo{{ID: "df-binding", Ref: "go-conventions/df-binding", Blocking: true}},
+		ReviewID:          "abc123",
+		Project:           "demo",
+		Rubric:            "rubric",
+		State:             StateCompleted,
+		ChangesetKind:     "full",
+		Reviewer:          ReviewerInfo{Name: "pi", Impl: "pi", Model: "m"},
+		StartedAt:         "2026-06-30T00:00:00Z",
+		UpdatedAt:         "2026-06-30T00:00:05Z",
+		CompletedAt:       "2026-06-30T00:00:05Z",
+		StatusPath:        path,
+		LogPath:           "log.md",
+		Error:             &errs.Info{Code: "user_error", Message: "bad input", Details: map[string]any{"key": "value"}, At: "2026-06-30T00:00:01Z"},
+		Files:             []string{"main.go", "internal/x.go"},
+		Qualities:         []QualityInfo{{ID: "df-binding", Ref: "go-conventions/df-binding", Blocking: true}},
+		ExcludedQualities: []QualityInfo{{ID: "cmd-only", Ref: "go-conventions/cmd-only", Blocking: true}},
 	}
 	if err := WriteStatus(path, in); err != nil {
 		t.Fatal(err)

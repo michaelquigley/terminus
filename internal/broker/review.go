@@ -449,13 +449,14 @@ func (j *reviewJob) status(state string, logPath string, errInfo *errs.Info) mon
 		Reviewer: monitor.ReviewerInfo{
 			Name: j.reviewerName,
 		},
-		StartedAt:  j.startedAt.UTC().Format(time.RFC3339),
-		UpdatedAt:  time.Now().UTC().Format(time.RFC3339),
-		StatusPath: j.statusPath,
-		LogPath:    logPath,
-		Error:      errInfo,
-		Files:      append([]string(nil), j.changeset.Files...),
-		Qualities:  monitorQualities(j.selected),
+		StartedAt:         j.startedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:         time.Now().UTC().Format(time.RFC3339),
+		StatusPath:        j.statusPath,
+		LogPath:           logPath,
+		Error:             errInfo,
+		Files:             append([]string(nil), j.changeset.Files...),
+		Qualities:         monitorQualities(j.selected),
+		ExcludedQualities: monitorQualities(j.excluded),
 	}
 	if state != monitor.StateRunning {
 		status.CompletedAt = status.UpdatedAt

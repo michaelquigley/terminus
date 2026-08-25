@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+CHANGE: `status.json` now records the rubric qualities territory narrowing excluded from a review, written from the review's first status write, so a running review's coverage is visible before the verdict lands; the `monitor` command stays a lean status view and prints no quality detail.
+
 ## v0.1.4
 
 FEATURE: Reviews report the qualities territory narrowing excluded, so a `clean` verdict is honest about how much of the rubric it covered. `result.json` and `collect_review` now carry `qualities_selected` and `excluded_qualities` (id, ref, blocking), and `terminus review` prints a one-line summary naming the excluded blocking qualities — flagging explicitly when every rubric quality was excluded and the verdict covered nothing. This closes the Sterling stage-1 failure mode, where all seven project invariants were silently excluded by territory and the review reported a vacuous clean.

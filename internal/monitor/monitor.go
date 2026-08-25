@@ -39,6 +39,10 @@ type ReviewStatus struct {
 	Error         *errs.Info    `json:"error,omitempty"`
 	Files         []string      `json:"files,omitempty"`
 	Qualities     []QualityInfo `json:"qualities,omitempty"`
+	// ExcludedQualities records the rubric qualities territory narrowing
+	// dropped from this review, so the status of a running review shows what
+	// it covers before the verdict lands.
+	ExcludedQualities []QualityInfo `json:"excluded_qualities,omitempty"`
 }
 
 type QualityInfo struct {
