@@ -1,3 +1,4 @@
 horizon:
-  - surface-territory-filtered-qualities.md
+  - report-excluded-qualities.md
+  - multiple-review-passes.md
   - grouped-reviews.md
