@@ -344,10 +344,24 @@ func TestReviewCollectThroughMCP(t *testing.T) {
 		t.Fatalf("list branch reviews = %#v, want the one completed review", listMap["reviews"])
 	}
 
-	// stage 2 will populate coverage on review results; stage 1 must not
-	// manufacture a coverage object, so the field is absent (historical nil).
-	if _, present := review["coverage"]; present {
-		t.Fatalf("stage 1 must not populate coverage on review results: %#v", review["coverage"])
+	coverage, ok := review["coverage"].(map[string]any)
+	if !ok {
+		t.Fatalf("review coverage = %#v, want an object", review["coverage"])
+	}
+	if coverage["assessed"] != true {
+		t.Fatalf("review coverage assessed = %#v, want true", coverage["assessed"])
+	}
+	counts, ok := coverage["file_counts"].(map[string]any)
+	if !ok || fmt.Sprint(counts["total"]) != "1" || fmt.Sprint(counts["uncovered"]) != "1" {
+		t.Fatalf("review coverage counts = %#v", coverage["file_counts"])
+	}
+	if files, ok := coverage["uncovered_files"].([]any); !ok || len(files) != 1 || files[0] != "main.go" {
+		t.Fatalf("review uncovered files = %#v", coverage["uncovered_files"])
+	}
+	for _, field := range []string{"local_qualities", "exclusions"} {
+		if values, ok := coverage[field].([]any); !ok || values == nil {
+			t.Fatalf("review coverage %s = %#v, want an array", field, coverage[field])
+		}
 	}
 }
 

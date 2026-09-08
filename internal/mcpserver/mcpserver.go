@@ -72,7 +72,7 @@ func New(b *broker.Broker) (*mcp.Server, error) {
 func RegisterTools(server *mcp.Server, b *broker.Broker) error {
 	if err := register(server, tool[StartReviewInput, StartReviewOutput]{
 		name:        "start_review",
-		description: "start one Terminus code review in the background. repo_path is required and drives project resolution from the canon. changeset_kind is working-tree, paths, or full; paths mode requires paths. rubric is the named rubric to select qualities from (defaults to the project's `rubric`); the available rubric names come from the canon's projects/<project>/ directory. qualities is an optional list of canon quality refs to review against directly, bypassing the rubric (an ad-hoc review); when set it takes precedence over rubric, and qualities_blocking makes them blocking (they are advisory by default). use the returned monitor_command while the review runs, then call collect_review with review_id.",
+		description: "start one Terminus code review in the background. repo_path is required and drives project resolution from the canon. changeset_kind is working-tree, paths, or full; paths mode requires paths. rubric is the named rubric to select qualities from (defaults to the project's `rubric`); the available rubric names come from the canon's projects/<project>/ directory. rubric reviews report territory coverage for their starting-point files in status, result, and collect; coverage gaps do not change the findings verdict. qualities is an optional list of canon quality refs to review against directly, bypassing the rubric (an ad-hoc review); when set it takes precedence over rubric, and qualities_blocking makes them blocking (they are advisory by default). use the returned monitor_command while the review runs, then call collect_review with review_id.",
 		input:       startReviewInputSchema,
 		output:      startReviewOutputSchema,
 		run: func(ctx context.Context, in StartReviewInput) (StartReviewOutput, error) {
@@ -104,7 +104,7 @@ func RegisterTools(server *mcp.Server, b *broker.Broker) error {
 
 	if err := register(server, tool[CollectReviewInput, CollectReviewOutput]{
 		name:        "collect_review",
-		description: "collect a completed Terminus review, or list known reviews when review_id is omitted. if a review is still running this returns a conflict error; monitor instead of retrying immediately. findings are triage ordered with blocking findings first.",
+		description: "collect a completed Terminus review, or list known reviews when review_id is omitted. if a review is still running this returns a conflict error; monitor instead of retrying immediately. findings are triage ordered with blocking findings first. rubric reviews include territory coverage for their starting-point files; coverage gaps can coexist with a clean findings verdict, while ad-hoc coverage is explicitly not assessed.",
 		input:       collectReviewInputSchema,
 		output:      collectReviewOutputSchema,
 		run: func(ctx context.Context, in CollectReviewInput) (CollectReviewOutput, error) {

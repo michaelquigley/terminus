@@ -18,6 +18,7 @@ import (
 	"github.com/michaelquigley/df/dd"
 	"github.com/michaelquigley/terminus/internal/canon"
 	"github.com/michaelquigley/terminus/internal/changeset"
+	"github.com/michaelquigley/terminus/internal/coverage"
 	"github.com/michaelquigley/terminus/internal/errs"
 	"github.com/michaelquigley/terminus/internal/findings"
 	"github.com/michaelquigley/terminus/internal/monitor"
@@ -54,6 +55,7 @@ type reviewJob struct {
 	changeset    changeset.Changeset
 	selected     []canon.Selected
 	excluded     []canon.Selected
+	coverage     *report.Coverage
 	reviewer     reviewer.Reviewer
 	reviewerName string
 	done         chan struct{}
@@ -146,12 +148,21 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 		return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "compose rubric", err, nil)
 	}
 	var selected, excluded []canon.Selected
+	var coverageReport *report.Coverage
 	if len(req.Qualities) > 0 {
 		// an explicitly named quality bypasses territory narrowing: a human
 		// naming it by hand has already made the judgment the filter automates.
 		selected = composed
 	} else {
 		selected, excluded = canon.Narrow(composed, cs.Files)
+		assessment, err := coverage.Assess(ctx, project, composed, cs.Files, rubric.CoverageExclusions, coverage.Options{})
+		if err != nil {
+			return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "assess coverage", err, nil)
+		}
+		coverageReport = report.CoverageFrom(assessment)
+	}
+	if coverageReport == nil {
+		coverageReport = report.CoverageFrom(coverage.Assessment{Assessed: false, Reason: "ad_hoc"})
 	}
 
 	id, err := newReviewID()
@@ -187,6 +198,7 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 		changeset:    cs,
 		selected:     cloneSelected(selected),
 		excluded:     cloneSelected(excluded),
+		coverage:     report.CloneCoverage(coverageReport),
 		reviewer:     b.options.Reviewer,
 		reviewerName: b.options.ReviewerInfo.Name,
 		done:         make(chan struct{}),
@@ -272,7 +284,8 @@ func (b *Broker) execute(ctx context.Context, job *reviewJob, promptText string)
 		ReviewerName:      job.reviewerName,
 		Raw:               append(json.RawMessage(nil), resp.Raw...),
 		Findings:          triage,
-		Guidance:          triageGuidance(triage),
+		Coverage:          report.CloneCoverage(job.coverage),
+		Guidance:          reviewGuidance(triage, job.coverage),
 	}
 	if len(triage) > 0 {
 		next := triage[0]
@@ -457,6 +470,7 @@ func (j *reviewJob) status(state string, logPath string, errInfo *errs.Info) mon
 		Files:             append([]string(nil), j.changeset.Files...),
 		Qualities:         monitorQualities(j.selected),
 		ExcludedQualities: monitorQualities(j.excluded),
+		Coverage:          report.CloneCoverage(j.coverage),
 	}
 	if state != monitor.StateRunning {
 		status.CompletedAt = status.UpdatedAt
@@ -524,6 +538,20 @@ func orderTriage(classified []findings.Classified) []TriageFindingOutput {
 	return classifiedToTriage(ordered)
 }
 
+func reviewGuidance(findings []TriageFindingOutput, coverageReport *report.Coverage) string {
+	guidance := triageGuidance(findings)
+	if coverageReport == nil {
+		return guidance + " coverage is unavailable for this historical review."
+	}
+	if !coverageReport.Assessed {
+		return guidance + " coverage was not assessed because this is an ad-hoc review."
+	}
+	if coverageReport.FileCounts == nil || coverageReport.FileCounts.Uncovered == 0 {
+		return guidance + " coverage found no uncovered starting-point files."
+	}
+	return fmt.Sprintf("%s coverage found %d uncovered starting-point file(s); clean concerns findings, not territory coverage. inspect the returned paths and rubric territories to investigate.", guidance, coverageReport.FileCounts.Uncovered)
+}
+
 func triageGuidance(findings []TriageFindingOutput) string {
 	if len(findings) == 0 {
 		return "no findings were returned. summarize that the review is clean, then decide whether another fresh review is needed."
@@ -547,6 +575,7 @@ func writeResult(path string, result CollectReviewResponse) error {
 		ReviewerName:      result.ReviewerName,
 		Raw:               append(json.RawMessage(nil), result.Raw...),
 		Findings:          append([]TriageFindingOutput(nil), result.Findings...),
+		Coverage:          report.CloneCoverage(result.Coverage),
 	}
 	return writeJSONAtomic(path, file)
 }
@@ -619,7 +648,8 @@ func collectFromStored(stored reviewResultFile) CollectReviewResponse {
 		ReviewerName:      stored.ReviewerName,
 		Raw:               append(json.RawMessage(nil), stored.Raw...),
 		Findings:          append([]TriageFindingOutput(nil), stored.Findings...),
-		Guidance:          triageGuidance(stored.Findings),
+		Coverage:          report.CloneCoverage(stored.Coverage),
+		Guidance:          reviewGuidance(stored.Findings, stored.Coverage),
 	}
 	if len(resp.Findings) > 0 {
 		next := resp.Findings[0]
@@ -633,6 +663,7 @@ func cloneCollectReviewResponse(in CollectReviewResponse) CollectReviewResponse 
 	out.Raw = append(json.RawMessage(nil), in.Raw...)
 	out.Findings = append([]TriageFindingOutput(nil), in.Findings...)
 	out.ExcludedQualities = append([]ExcludedQuality(nil), in.ExcludedQualities...)
+	out.Coverage = report.CloneCoverage(in.Coverage)
 	if in.NextFinding != nil {
 		next := *in.NextFinding
 		out.NextFinding = &next

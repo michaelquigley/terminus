@@ -139,6 +139,7 @@ func printReviewResult(cmd *cobra.Command, result broker.CollectReviewResponse) 
 	}
 	fmt.Fprintf(out, "verdict: %s\n", result.Verdict)
 	fmt.Fprintf(out, "clean: %t\n", result.Clean)
+	printCoverageSummary(out, result)
 	if result.ReviewerName != "" {
 		fmt.Fprintf(out, "reviewer: %s\n", result.ReviewerName)
 	}
