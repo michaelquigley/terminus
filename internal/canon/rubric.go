@@ -28,9 +28,15 @@ type RubricEntry struct {
 }
 
 type Rubric struct {
-	Project   ProjectInfo    `dd:"project"`
-	Qualities []RubricEntry  `dd:"qualities,+required"`
-	Extra     map[string]any `dd:",+extra"`
+	Project   ProjectInfo   `dd:"project"`
+	Qualities []RubricEntry `dd:"qualities,+required"`
+	// CoverageExclusions are territory globs whose matching files are
+	// suppressed from uncovered-file complaints. they do not remove files
+	// from the changeset or affect quality selection. declared spelling is
+	// preserved for reporting; matching normalizes. absent or empty means no
+	// exceptions. the dd key is the snake_case default, coverage_exclusions.
+	CoverageExclusions []string
+	Extra              map[string]any `dd:",+extra"`
 }
 
 func LoadRubric(store *Store, project string, rubric string) (Rubric, error) {
@@ -93,7 +99,7 @@ func ListRubrics(store *Store, project string) ([]string, error) {
 }
 
 // rubricFileName normalizes a requested rubric name to a single-segment file
-// name. An empty request resolves to the default rubric; names that escape the
+// name. an empty request resolves to the default rubric; names that escape the
 // project directory are rejected.
 func rubricFileName(rubric string) (string, error) {
 	rubric = strings.TrimSpace(rubric)
@@ -127,6 +133,11 @@ func ParseRubric(raw []byte) (Rubric, error) {
 			return Rubric{}, fmt.Errorf("rubric qualities[%d]: %w", i, err)
 		}
 		r.Qualities[i].Ref = clean
+	}
+	for i, pattern := range r.CoverageExclusions {
+		if err := ValidateTerritory(pattern); err != nil {
+			return Rubric{}, fmt.Errorf("rubric coverage_exclusions[%d] %q: %w", i, pattern, err)
+		}
 	}
 	return r, nil
 }

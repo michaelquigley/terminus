@@ -39,7 +39,7 @@ func Compose(store *Store, r Rubric) ([]Selected, error) {
 // least one starting-point file (selected) and the ones it does not
 // (excluded); a quality with no territory always applies.
 func Narrow(composed []Selected, changedFiles []string) (selected, excluded []Selected) {
-	files := normalizeFiles(changedFiles)
+	files := NormalizeFiles(changedFiles)
 	for _, s := range composed {
 		if len(s.Quality.Head.Territory) == 0 || territoryMatchesAny(s.Quality.Head.Territory, files) {
 			selected = append(selected, s)
@@ -50,19 +50,36 @@ func Narrow(composed []Selected, changedFiles []string) (selected, excluded []Se
 	return selected, excluded
 }
 
+// ValidateTerritory checks a territory pattern's syntax by visiting every
+// normalized segment: ** is legal only as an entire segment, and every other
+// segment must be a syntactically valid path.Match pattern. matching one
+// dummy path would let an early segment that fails to match hide invalid
+// syntax in a later segment (such as `internal/[`), so validation walks all
+// segments against the pattern grammar instead. it is used for both quality
+// territories and rubric coverage exclusions.
 func ValidateTerritory(pattern string) error {
 	pattern = normalizePattern(pattern)
 	if pattern == "" {
 		return fmt.Errorf("empty territory pattern")
 	}
-	_, err := matchTerritory(pattern, "__terminus_validation__/file.go")
-	return err
+	for _, segment := range strings.Split(pattern, "/") {
+		if segment == "**" {
+			continue
+		}
+		if strings.Contains(segment, "**") {
+			return fmt.Errorf("** must occupy its own path segment in pattern %q", pattern)
+		}
+		if _, err := path.Match(segment, ""); err != nil {
+			return fmt.Errorf("invalid territory pattern %q: %w", pattern, err)
+		}
+	}
+	return nil
 }
 
 func territoryMatchesAny(patterns []string, files []string) bool {
 	for _, pattern := range patterns {
 		for _, file := range files {
-			matched, err := matchTerritory(pattern, file)
+			matched, err := MatchTerritory(pattern, file)
 			if err == nil && matched {
 				return true
 			}
@@ -71,7 +88,11 @@ func territoryMatchesAny(patterns []string, files []string) bool {
 	return false
 }
 
-func matchTerritory(pattern string, file string) (bool, error) {
+// MatchTerritory reports whether a territory pattern (slash-path glob with
+// recursive **; a trailing slash means the tree beneath) matches a
+// repository-relative file. both are normalized, so callers may pass
+// declared spellings and raw paths.
+func MatchTerritory(pattern string, file string) (bool, error) {
 	pattern = normalizePattern(pattern)
 	file = normalizeFile(file)
 	if pattern == "" || file == "" {
@@ -115,7 +136,10 @@ func matchSegments(patterns []string, files []string) (bool, error) {
 	return matchSegments(patterns[1:], files[1:])
 }
 
-func normalizeFiles(files []string) []string {
+// NormalizeFiles deduplicates and sorts repository-relative paths, stripping
+// surrounding slashes and a leading `./`. both review narrowing and coverage
+// assessment run on this canonical form.
+func NormalizeFiles(files []string) []string {
 	seen := map[string]struct{}{}
 	for _, file := range files {
 		file = normalizeFile(file)

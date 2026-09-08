@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -23,6 +22,7 @@ import (
 	"github.com/michaelquigley/terminus/internal/findings"
 	"github.com/michaelquigley/terminus/internal/monitor"
 	terminusprompt "github.com/michaelquigley/terminus/internal/prompt"
+	"github.com/michaelquigley/terminus/internal/report"
 	"github.com/michaelquigley/theharnessbody/record"
 	"github.com/michaelquigley/theharnessbody/reviewer"
 )
@@ -376,7 +376,7 @@ func (b *Broker) CollectReview(ctx context.Context, req CollectReviewRequest) (C
 		return CollectReviewResponse{}, errs.New(errs.CodeNotFound, "review result not found", err, nil)
 	}
 	var stored reviewResultFile
-	if err := dd.BindJSON(&stored, raw, ddJSONOpts); err != nil {
+	if err := report.BindJSON(&stored, raw); err != nil {
 		return CollectReviewResponse{}, errs.New(errs.CodeInternalError, "parse review result", err, nil)
 	}
 	return collectFromStored(stored), nil
@@ -465,7 +465,7 @@ func (j *reviewJob) status(state string, logPath string, errInfo *errs.Info) mon
 }
 
 func monitorQualities(selected []canon.Selected) []monitor.QualityInfo {
-	out := make([]monitor.QualityInfo, 0, len(selected))
+	out := []monitor.QualityInfo(nil)
 	for _, s := range selected {
 		out = append(out, monitor.QualityInfo{
 			ID:       s.Quality.Head.ID,
@@ -477,7 +477,7 @@ func monitorQualities(selected []canon.Selected) []monitor.QualityInfo {
 }
 
 func excludedQualityInfos(excluded []canon.Selected) []ExcludedQuality {
-	out := make([]ExcludedQuality, 0, len(excluded))
+	out := []ExcludedQuality(nil)
 	for _, s := range excluded {
 		out = append(out, ExcludedQuality{
 			ID:       s.Quality.Head.ID,
@@ -551,47 +551,15 @@ func writeResult(path string, result CollectReviewResponse) error {
 	return writeJSONAtomic(path, file)
 }
 
-// rawMessageConverter passes a json.RawMessage field (the reviewer's raw output)
-// through dd as embedded JSON; dd's generic unbind would otherwise render the
-// underlying []byte as a number array.
-type rawMessageConverter struct{}
-
-func (rawMessageConverter) ToRaw(value interface{}) (interface{}, error) {
-	rm, ok := value.(json.RawMessage)
-	if !ok || len(rm) == 0 {
-		return nil, nil
-	}
-	var v any
-	if err := json.Unmarshal(rm, &v); err != nil {
-		return nil, err
-	}
-	return v, nil
-}
-
-func (rawMessageConverter) FromRaw(raw interface{}) (interface{}, error) {
-	if raw == nil {
-		return json.RawMessage(nil), nil
-	}
-	b, err := json.Marshal(raw)
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(b), nil
-}
-
-// ddJSONOpts binds review artifacts through df/dd while passing the raw reviewer
-// output through unchanged.
-var ddJSONOpts = &dd.Options{
-	Converters: map[reflect.Type]dd.Converter{
-		reflect.TypeOf(json.RawMessage{}): rawMessageConverter{},
-	},
-}
+// the raw-reviewer-JSON converter and the dd options that carry it now live
+// in the shared report codec, which disk persistence and the MCP adapter both
+// bind through so they agree on raw reviewer content.
 
 func writeJSONAtomic(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	raw, err := dd.UnbindJSON(v, ddJSONOpts)
+	raw, err := report.UnbindJSON(v)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,6 @@
 # Territory coverage
 
-Design decisions settled, 2026-09-08. This spec joins [report territory coverage gaps](roadmap/report-territory-coverage-gaps.md) and [territory coverage audit](roadmap/territory-coverage-audit.md). It records the agreed behavior and architectural boundaries. The [work order](territory-coverage-work-order.md) specifies the exact wire schema, implementation placement, and validation. The pair completed Mercurius review with a `ready_to_build` verdict; implementation has not started.
+Design decisions settled, 2026-09-08. This spec joins [report territory coverage gaps](roadmap/report-territory-coverage-gaps.md) and [territory coverage audit](roadmap/territory-coverage-audit.md). It records the agreed behavior and architectural boundaries. The [work order](territory-coverage-work-order.md) specifies the exact wire schema, implementation placement, and validation. The original pair completed Mercurius review with a `ready_to_build` verdict. During stage 1 review, Michael clarified the binding boundary below; the work order carries the corresponding amendment before stage acceptance.
 
 ## The problem
 
@@ -35,6 +35,8 @@ The audit runs no reviewer, creates no review record, and edits neither project 
 The review and audit use the same rubric interpretation and territory matching semantics. Existing territory patterns are repository-relative slash-path globs with recursive `**`; a trailing slash means the tree beneath it. Coverage exclusions use that same language.
 
 Centralize coverage logic in one shared calculation. Reviews and audits supply their respective file sets and use the same rules for project-local identity, territory matching, and coverage exclusions. MCP serialization and CLI formatting sit outside that calculation; neither adapter independently decides whether a file is covered. Keep wire-schema knowledge out of the coverage model.
+
+All project-data binding and unbinding uses `df/dd`, including MCP tool arguments, results, and errors. The MCP SDK owns the protocol envelope; that does not exempt our payload structs from the shared binding substrate. Project-owned structs have no `json` tags. Tool discovery and schema validation remain available through the transport adapter without introducing a second set of payload binding rules.
 
 Project-local qualities are those whose canon refs are beneath `projects/<resolved-project>/` and that appear in the selected rubric. This uses the existing canon organization without adding tier metadata. A quality omitted from this rubric cannot account for this rubric's reach; general conventions and qualities imported from another project's directory do not satisfy the local-coverage check.
 
@@ -130,7 +132,7 @@ The following decisions and the boundaries in the seam census are settled. The w
 | Coverage report / review execution | Settled: separate. Coverage exposes reach; it neither widens selection nor changes the verdict. Revisit automatic widening only as a deliberate later feature. |
 | Audit evidence / canon mutation | Settled: separate. The tool reads and reports; the agent and operator own reviewable canon edits. |
 | Coverage computation / presentation | Settled: one shared calculation feeding structured MCP data and CLI rendering. Both consumers must agree on matches; directory formatting must not define coverage. |
-| Model / transport | Settled: keep MCP schema and serialization concerns at the transport boundary; the calculation expresses file-to-quality relationships. |
+| Model / transport | Settled: keep MCP schema and serialization concerns at the transport boundary; the calculation expresses file-to-quality relationships. `dd` owns project payload binding; the SDK owns the enclosing protocol. |
 | Operational errors / diagnostic results | Settled: invalid input and failed reads use the service's error path; coverage gaps and dead patterns remain successful reports. |
 
 ## Deferred (and Why)

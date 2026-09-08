@@ -9,6 +9,7 @@ import (
 
 	"github.com/michaelquigley/df/dd"
 	"github.com/michaelquigley/terminus/internal/errs"
+	"github.com/michaelquigley/terminus/internal/report"
 )
 
 const (
@@ -19,36 +20,42 @@ const (
 )
 
 type ReviewerInfo struct {
-	Name  string `json:"name"`
-	Impl  string `json:"impl"`
-	Model string `json:"model,omitempty"`
+	Name  string
+	Impl  string
+	Model string `dd:",+omitempty"`
 }
 
 type ReviewStatus struct {
-	ReviewID      string        `json:"review_id"`
-	Project       string        `json:"project"`
-	Rubric        string        `json:"rubric,omitempty"`
-	State         string        `json:"state"`
-	ChangesetKind string        `json:"changeset_kind"`
-	Reviewer      ReviewerInfo  `json:"reviewer"`
-	StartedAt     string        `json:"started_at"`
-	UpdatedAt     string        `json:"updated_at"`
-	CompletedAt   string        `json:"completed_at,omitempty"`
-	StatusPath    string        `json:"status_path"`
-	LogPath       string        `json:"log_path,omitempty"`
-	Error         *errs.Info    `json:"error,omitempty"`
-	Files         []string      `json:"files,omitempty"`
-	Qualities     []QualityInfo `json:"qualities,omitempty"`
+	ReviewID      string
+	Project       string
+	Rubric        string `dd:",+omitempty"`
+	State         string
+	ChangesetKind string
+	Reviewer      ReviewerInfo
+	StartedAt     string
+	UpdatedAt     string
+	CompletedAt   string `dd:",+omitempty"`
+	StatusPath    string
+	LogPath       string `dd:",+omitempty"`
+	Error         *errs.Info
+	Files         []string      `dd:",+omitempty"`
+	Qualities     []QualityInfo `dd:",+omitempty"`
 	// ExcludedQualities records the rubric qualities territory narrowing
 	// dropped from this review, so the status of a running review shows what
 	// it covers before the verdict lands.
-	ExcludedQualities []QualityInfo `json:"excluded_qualities,omitempty"`
+	ExcludedQualities []QualityInfo `dd:",+omitempty"`
+	// Coverage is the territory-coverage assessment computed before the
+	// reviewer starts, carried unchanged from the first status write through
+	// completion or failure. nil on reviews recorded before coverage
+	// reporting existed: absence is unavailable, never an assessed empty
+	// gap list, and must not be filled in from the current canon.
+	Coverage *report.Coverage
 }
 
 type QualityInfo struct {
-	ID       string `json:"id"`
-	Ref      string `json:"ref"`
-	Blocking bool   `json:"blocking"`
+	ID       string
+	Ref      string
+	Blocking bool
 }
 
 func ReviewDir(logDestination string, project string, reviewID string) string {

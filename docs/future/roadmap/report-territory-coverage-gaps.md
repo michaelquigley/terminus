@@ -1,6 +1,6 @@
 ---
 title: report territory coverage gaps
-state: researching
+state: building
 created: 2026-09-08
 tags: [feature]
 milestone: v0.1.x
