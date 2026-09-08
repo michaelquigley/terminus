@@ -136,6 +136,8 @@ The review target — working-tree changes, given paths, or the full tracked rep
 - `collect_review` — collect a completed review by `review_id`, or list known runs when omitted. A still-running review returns a conflict.
 - `audit_coverage` — read-only full-tree audit returning coverage, dead patterns, and an optional per-file map (`include_map: true`); it runs no reviewer and writes no review record.
 
+See [territory coverage](docs/current/territory-coverage.md) for project-local reach, exclusions, response fields, and agent workflows.
+
 ## Where reviews are written
 
 Review records live **outside** the subject repo, under `log_destination/<project>/<review_id>/` (default `~/.local/share/terminus`), because the prompt embeds private quality bodies. Each review directory holds:

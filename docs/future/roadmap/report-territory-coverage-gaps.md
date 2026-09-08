@@ -1,12 +1,12 @@
 ---
 title: report territory coverage gaps
-state: building
+state: evaluating
 created: 2026-09-08
 tags: [feature]
 milestone: v0.1.x
 log:
   - stamp: 2026-09-08
-    note: draft spec at docs/future/territory-coverage.md; shared model with territory-coverage-audit, open decisions pending
+    note: implemented and accepted through stage 3; current contract at docs/current/territory-coverage.md
 ---
 
 By default, have rubric-based reviews report starting-point files that no project-local quality in the selected rubric reaches. Let each rubric suppress intentional gaps with a `coverage_exclusions:` list of territory globs beside `qualities:`, such as `docs/**` or `demo/**`. The report is a first-class field beside the verdict in `result.json`, the CLI output, and the MCP `collect_review` response, never only a line in the quality list. Report gaps without widening quality selection or changing the verdict calculation. Exclusions suppress coverage complaints only; they do not exclude files from review or change which qualities run. An absent `coverage_exclusions:` means report all gaps.
@@ -25,6 +25,6 @@ The selected and excluded qualities are already in the result, and a standing in
 
 **Reporting only, initially.** Selecting the whole project-local tier may supply rules about unrelated packages; it does not establish that an uncovered package has an appropriate quality. Report the gap alongside the findings-based verdict so the operator can extend an applicable quality's territory or add a missing rule. This is a check of territory reach, not proof that the rules are sufficient.
 
-**Design.** The shared [territory coverage spec](../territory-coverage.md) records the agreed behavior and boundaries. The work order will specify exact output members and serialization details.
+**Current behavior.** [Territory coverage](../../current/territory-coverage.md) records the implemented behavior, output members, and compatibility boundaries. [Follow-ons](../territory-coverage-follow-ons.md) retain separately scoped work.
 
 **Related.** `territory-coverage-audit` is the same check over the full tracked tree, run by hand rather than per review.
