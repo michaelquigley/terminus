@@ -1,6 +1,6 @@
 # Territory coverage
 
-Design decisions settled, 2026-09-08. This spec joins [report territory coverage gaps](roadmap/report-territory-coverage-gaps.md) and [territory coverage audit](roadmap/territory-coverage-audit.md). It records the agreed behavior and architectural boundaries. The work order will specify the exact wire schema, implementation placement, and validation before design review and implementation.
+Design decisions settled, 2026-09-08. This spec joins [report territory coverage gaps](roadmap/report-territory-coverage-gaps.md) and [territory coverage audit](roadmap/territory-coverage-audit.md). It records the agreed behavior and architectural boundaries. The [work order](territory-coverage-work-order.md) specifies the exact wire schema, implementation placement, and validation. The pair completed Mercurius review with a `ready_to_build` verdict; implementation has not started.
 
 ## The problem
 
@@ -62,17 +62,17 @@ The report describes the review's starting points, not every file the reviewer m
 
 Coverage is computed before the reviewer starts and appears in `status.json` from the first status write. The completed result and collect response carry that same assessment unchanged, so a running review exposes its gaps immediately and a later verdict does not redefine its coverage.
 
-Structured reporting uses one `coverage` object containing whether coverage was assessed, file counts, uncovered paths, and applied exclusions. It distinguishes an assessment with no gaps from an assessment where every input file was excluded, and from coverage not assessed with an explicit reason. Counts must also distinguish an empty input scope from a nonempty scope whose files were all excluded. The work order will specify exact member names and serialization details for this model.
+Structured reporting uses one `coverage` object containing whether coverage was assessed, file counts, uncovered paths, and applied exclusions. It distinguishes an assessment with no gaps from an assessment where every input file was excluded, and from coverage not assessed with an explicit reason. Counts must also distinguish an empty input scope from a nonempty scope whose files were all excluded. The work order specifies exact member names and serialization details for this model.
 
 Older results without a `coverage` field mean coverage information is unavailable. Reading them must not manufacture an assessed empty gap list or otherwise present missing historical information as proof of coverage.
 
 Ad-hoc reviews (`--quality` or MCP `qualities`) explicitly report coverage as not assessed, with the reason that the review is ad-hoc. They continue to bypass rubric resolution; no rubric is loaded solely for coverage checking. The CLI says `coverage: not assessed — ad-hoc review`, and structured results carry the same distinction from an assessed empty gap list. An agent can request a separate rubric audit when it needs coverage evidence.
 
-Review coverage uses the existing changeset file list unchanged, without an additional existence filter. Working-tree reviews include untracked additions and deleted paths; path and full reviews retain their tracked-file scope. A deleted path's coverage describes scrutiny of its removal. The standalone audit uses the same full tracked scope as a full review, so untracked additions enter the audit only after being added to Git. Coverage does not introduce its own interpretation of staged or unstaged renames and deletions: it checks the paths returned by the existing scope extraction. Planning must verify those extraction cases against the current implementation.
+Review coverage uses the existing changeset file list unchanged, without an additional existence filter. Working-tree reviews include untracked additions and deleted paths; path and full reviews retain their tracked-file scope. A deleted path's coverage describes scrutiny of its removal. The standalone audit uses the same full tracked scope as a full review, so untracked additions enter the audit only after being added to Git. Coverage does not introduce its own interpretation of staged or unstaged renames and deletions: it checks the paths returned by the existing scope extraction. The work order records planning verification of those extraction cases and the integration tests that must preserve them.
 
 ## Audit through MCP and CLI
 
-The MCP tool is named `audit_coverage` and takes required `repo_path`, an optional `rubric` defaulting to `rubric`, and `include_map` defaulting to false. The CLI counterpart is `terminus audit-coverage --repo <path> --rubric <name> [--include-map]`. Each request audits one rubric. The work order will pin the exact response schema to the structure below.
+The MCP tool is named `audit_coverage` and takes required `repo_path`, an optional `rubric` defaulting to `rubric`, and `include_map` defaulting to false. The CLI counterpart is `terminus audit-coverage --repo <path> --rubric <name> [--include-map]`. Each request audits one rubric. The work order pins the exact response schema to the structure below.
 
 The MCP tool description must advertise the optional map explicitly, including how to request it, its default, and why an agent would use it. The `include_map` input field must also carry a description in the exposed input schema. Map discovery must not depend on reading project documentation or first running an audit. Both descriptions explain that the map shows matching local qualities per file, including files that already have coverage, so it helps investigate differences in reach beyond zero-coverage gaps.
 
@@ -115,7 +115,7 @@ Use stable ordering for paths, patterns, and refs so successive audits are easy 
 
 ## Design decisions
 
-The following decisions and the boundaries in the seam census are settled. Planning will translate them into the concrete schema and implementation without changing their behavior.
+The following decisions and the boundaries in the seam census are settled. The work order translates them into the concrete schema and implementation plan without changing their behavior.
 
 1. **Project-local identity — settled.** The definition is recorded under One coverage model.
 2. **Qualities without territory — settled.** The coverage rule and its tradeoff are recorded under One coverage model.
