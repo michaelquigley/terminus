@@ -130,11 +130,7 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 		}
 		rubric = canon.Rubric{Project: canon.ProjectInfo{Repo: project}, Qualities: entries}
 	} else {
-		rubricName = strings.TrimSpace(req.Rubric)
-		if rubricName == "" {
-			rubricName = canon.DefaultRubric
-		}
-		rubric, project, err = canon.LoadProjectRubric(store, repoPath, rubricName)
+		rubric, project, rubricName, err = canon.LoadProjectRubric(store, repoPath, req.Rubric)
 		if err != nil {
 			return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "load project rubric", err, map[string]any{"repo_path": repoPath, "rubric": rubricName})
 		}
@@ -549,7 +545,7 @@ func reviewGuidance(findings []TriageFindingOutput, coverageReport *report.Cover
 	if coverageReport.FileCounts == nil || coverageReport.FileCounts.Uncovered == 0 {
 		return guidance + " coverage found no uncovered starting-point files."
 	}
-	return fmt.Sprintf("%s coverage found %d uncovered starting-point file(s); clean concerns findings, not territory coverage. inspect the returned paths and rubric territories to investigate.", guidance, coverageReport.FileCounts.Uncovered)
+	return fmt.Sprintf("%s coverage found %d uncovered starting-point file(s); clean concerns findings, not territory coverage. use audit_coverage, optionally with its coverage map, to investigate.", guidance, coverageReport.FileCounts.Uncovered)
 }
 
 func triageGuidance(findings []TriageFindingOutput) string {

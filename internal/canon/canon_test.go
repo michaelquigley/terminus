@@ -92,7 +92,7 @@ qualities:
   - ref: go-conventions/df-logging
 `)
 	store, _ := NewStore(root)
-	_, _, err := LoadProjectRubric(store, filepath.Join(t.TempDir(), "sample"), DefaultRubric)
+	_, _, _, err := LoadProjectRubric(store, filepath.Join(t.TempDir(), "sample"), DefaultRubric)
 	if err == nil || !strings.Contains(err.Error(), "project.repo mismatch") {
 		t.Fatalf("expected project.repo mismatch, got %v", err)
 	}

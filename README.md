@@ -68,12 +68,13 @@ terminus review                                  # your working-tree changes
 terminus review --kind full                      # the whole tracked repo
 terminus review --kind paths internal/ cmd/      # specific paths
 terminus review --rubric architecture            # a different lens
+terminus audit-coverage --include-map             # full-tree territory evidence
 ```
 
 Or run the MCP server and drive it from an agent:
 
 ```bash
-terminus serve            # stdio MCP server; exposes start_review / collect_review
+terminus serve            # stdio MCP server; also exposes audit_coverage
 ```
 
 ## Concepts
@@ -108,7 +109,7 @@ qualities:
     blocking: false
 ```
 
-A project can carry several **named rubrics** — different subsets of the canon for different lenses. They live flat at `projects/<project>/<name>.yaml`, default to `rubric.yaml`, and are selected with `--rubric <name>` (or the MCP `rubric` field). Blocking is per-rubric, so the same quality can block under `architecture` and merely advise under `code-issues`. List what a project has with `terminus rubrics`.
+A project can carry several **named rubrics** — different subsets of the canon for different lenses. They live flat at `projects/<project>/<name>.yaml`, default to `rubric.yaml`, and are selected with `--rubric <name>` (or the MCP `rubric` field). Blocking is per-rubric, so the same quality can block under `architecture` and merely advise under `code-issues`. A rubric may declare `coverage_exclusions` using the territory glob language; these suppress uncovered-file reports without removing files or findings. List what a project has with `terminus rubrics`.
 
 ### Starting points, not a fence
 
@@ -120,18 +121,20 @@ The review target — working-tree changes, given paths, or the full tracked rep
 
 | Command | What it does |
 | --- | --- |
-| `terminus review [paths…]` | Run a review in the foreground and print the verdict + findings. |
+| `terminus review [paths…]` | Run a review in the foreground and print the verdict, coverage, and findings. |
+| `terminus audit-coverage` | Audit one rubric over the full tracked tree without running a reviewer. |
 | `terminus rubrics` | List the rubrics available for a project. |
 | `terminus serve` | Run the stdio MCP server. |
 | `terminus monitor <id> --wait` | Poll a running review's `status.json`. |
 | `terminus version` | Print build metadata. |
 
-`terminus review` flags: `--repo` (default `.`), `--kind` (`working-tree` | `paths` | `full`, default `working-tree`), `--rubric` (default `rubric`). A clean working tree with the default `--kind` is automatically promoted to `full` so a bare `terminus review` never reviews nothing.
+`terminus review` flags: `--repo` (default `.`), `--kind` (`working-tree` | `paths` | `full`, default `working-tree`), `--rubric` (default `rubric`). A clean working tree with the default `--kind` is automatically promoted to `full` so a bare `terminus review` never reviews nothing. `terminus audit-coverage` accepts `--repo`, `--rubric`, and `--include-map`; gaps and dead patterns are successful diagnostic output.
 
 **MCP**
 
 - `start_review` — start a review in the background; takes `repo_path`, `changeset_kind`, optional `paths`, optional `rubric`. Returns a `review_id` and a monitor command.
 - `collect_review` — collect a completed review by `review_id`, or list known runs when omitted. A still-running review returns a conflict.
+- `audit_coverage` — read-only full-tree audit returning coverage, dead patterns, and an optional per-file map (`include_map: true`); it runs no reviewer and writes no review record.
 
 ## Where reviews are written
 

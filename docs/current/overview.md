@@ -105,10 +105,38 @@ terminus review --kind paths internal/canon cmd/terminus
 
 When `--kind` is left at its default and the working tree is clean, the command promotes the review to `full` and prints `working tree clean; reviewing full tracked repo`. This keeps a bare `terminus review` on a committed repo from selecting nothing and reporting a vacuous `clean`. An explicit `--kind working-tree` is always honored, even on a clean tree. The promotion is CLI-only; the MCP `start_review` tool reviews exactly the `changeset_kind` it is given.
 
+## Coverage Audit
+
+`terminus audit-coverage --repo <path> --rubric <name> [--include-map]` audits one rubric against the full tracked tree. The defaults are `--repo .`, `--rubric rubric`, and no map. It reports the project, normalized rubric name, full scope, coverage summary, uncovered paths grouped by immediate parent, and dead territory patterns. `--include-map` adds every tracked file with its matching project-local quality refs and exclusion patterns, grouped by directory without hiding per-file differences.
+
+The audit is read-only: it runs no reviewer, allocates no review id, creates no review artifacts, and edits neither project nor canon. Gaps and dead patterns are successful diagnostic results. A territory-free project-local quality reaches every input file. The map is evidence for inspecting invariant reach, not a score; more matching qualities do not establish better coverage.
+
+```json
+{
+  "project": "example",
+  "rubric": "rubric",
+  "file_scope": "full",
+  "coverage": {
+    "assessed": true,
+    "file_counts": {"total": 2, "excluded": 0, "covered": 1, "uncovered": 1},
+    "local_qualities": [{"id": "config-validation", "ref": "projects/example/config-validation"}],
+    "uncovered_files": ["internal/gateway/handler.go"],
+    "exclusions": []
+  },
+  "dead_patterns": []
+}
+```
+
+`coverage_map` is omitted unless requested. With `include_map: true`, it is an array of `{directory, files}` groups; each file carries exact `file`, `qualities`, and `exclusion_patterns` arrays, including empty arrays.
+
+Audit scope follows Git's tracked-file view exactly. Untracked files do not appear. An unstaged deletion remains tracked and can keep a territory pattern live; a staged deletion is absent. An unstaged rename therefore leaves the old tracked path in the audit until the rename is staged.
+
 ## MCP Surface
 
 `start_review` takes `repo_path`, `changeset_kind` (`working-tree`, `paths`, or `full`), optional `paths`, and an optional `rubric` name (defaulting to `rubric`). It resolves the named project rubric, narrows the qualities, writes `_prompt.md`, starts the reviewer in the background, and returns a `review_id` plus a monitor command. The selected rubric is recorded in `status.json` and `result.json`. An optional `qualities` list reviews against those canon quality refs directly, bypassing the rubric (an ad-hoc review); it takes precedence over `rubric`, and `qualities_blocking` makes them blocking (advisory by default).
 
-`collect_review` returns a completed review when given `review_id`; if omitted, it lists known review runs. A running review returns `conflict`. The result carries coverage from dispatch, including uncovered starting-point paths and applied exclusions, alongside `qualities_selected` and any `excluded_qualities` (id, ref, blocking). Coverage gaps do not change the findings verdict; collect guidance points agents to the returned paths and rubric territories for investigation. Ad-hoc reviews report coverage as not assessed, and pre-coverage historical results remain unavailable.
+`collect_review` returns a completed review when given `review_id`; if omitted, it lists known review runs. A running review returns `conflict`. The result carries coverage from dispatch, including uncovered starting-point paths and applied exclusions, alongside `qualities_selected` and any `excluded_qualities` (id, ref, blocking). Coverage gaps do not change the findings verdict; collect guidance points agents to `audit_coverage` and its optional map for investigation. Ad-hoc reviews report coverage as not assessed, and pre-coverage historical results remain unavailable.
+
+`audit_coverage` takes required `repo_path`, optional `rubric` (default `rubric`), and optional `include_map` (default false). It returns the same assessed coverage object over the full tracked tree, dead patterns from every rubric tier, and the optional directory-grouped per-file map. Tool discovery exposes the map option and marks the operation read-only and explicitly non-destructive. Audit errors use the ordinary structured error envelope; gaps and dead patterns return successful results.
 
 The CLI also exposes `terminus monitor --project <project> --wait <review_id>` for polling `status.json`.

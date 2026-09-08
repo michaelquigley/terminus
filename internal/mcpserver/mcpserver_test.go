@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,6 +165,31 @@ func TestToolDiscoveryThroughMCP(t *testing.T) {
 	if !ok || collect.InputSchema == nil || collect.OutputSchema == nil {
 		t.Fatalf("collect_review missing or without schemas: %#v", byName["collect_review"])
 	}
+	audit, ok := byName["audit_coverage"]
+	if !ok || audit.InputSchema == nil || audit.OutputSchema == nil {
+		t.Fatalf("audit_coverage missing or without schemas: %#v", byName["audit_coverage"])
+	}
+	if audit.Annotations == nil || !audit.Annotations.ReadOnlyHint || audit.Annotations.DestructiveHint == nil || *audit.Annotations.DestructiveHint {
+		t.Fatalf("audit annotations = %#v", audit.Annotations)
+	}
+	if !strings.Contains(audit.Description, "include_map") || !strings.Contains(audit.Description, "read-only") {
+		t.Fatalf("audit description does not expose map/read-only contract: %q", audit.Description)
+	}
+	auditInput := audit.InputSchema.(map[string]any)
+	auditProps := auditInput["properties"].(map[string]any)
+	if _, ok := auditProps["include_map"]; !ok {
+		t.Fatalf("audit input schema missing include_map: %#v", auditProps)
+	}
+	if required, ok := auditInput["required"].([]any); !ok || len(required) != 1 || required[0] != "repo_path" {
+		t.Fatalf("audit required fields = %#v", auditInput["required"])
+	}
+	auditOutput := audit.OutputSchema.(map[string]any)
+	outputProps := auditOutput["properties"].(map[string]any)
+	for _, field := range []string{"coverage", "dead_patterns", "coverage_map"} {
+		if _, ok := outputProps[field]; !ok {
+			t.Fatalf("audit output schema missing %q: %#v", field, outputProps)
+		}
+	}
 	// the start_review input schema advertises repo_path and the ad-hoc fields.
 	inputObj, ok := start.InputSchema.(map[string]any)
 	if !ok {
@@ -174,6 +200,70 @@ func TestToolDiscoveryThroughMCP(t *testing.T) {
 		if _, ok := props[k]; !ok {
 			t.Fatalf("start input schema missing %q: %#v", k, props)
 		}
+	}
+}
+
+func TestAuditCoverageThroughMCP(t *testing.T) {
+	repo := initGitRepo(t)
+	writeFile(t, filepath.Join(repo, "main.go"), "package main\n")
+	git(t, repo, "add", ".")
+	git(t, repo, "commit", "-m", "initial")
+	canonRoot := fixtureCanon(t, filepath.Base(repo))
+	cs := dialMCP(t, broker.New(broker.Options{CanonPath: canonRoot}))
+
+	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "audit_coverage", Arguments: map[string]any{"repo_path": repo, "include_map": true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("audit returned tool error: %#v", res.StructuredContent)
+	}
+	out := structuredContent(t, res)
+	if out["project"] != filepath.Base(repo) || out["rubric"] != "rubric" || out["file_scope"] != "full" {
+		t.Fatalf("audit identity = %#v", out)
+	}
+	coverage := out["coverage"].(map[string]any)
+	counts := coverage["file_counts"].(map[string]any)
+	if fmt.Sprint(counts["total"]) != "1" || fmt.Sprint(counts["uncovered"]) != "1" {
+		t.Fatalf("audit coverage = %#v", coverage)
+	}
+	if groups, ok := out["coverage_map"].([]any); !ok || len(groups) != 1 {
+		t.Fatalf("audit coverage_map = %#v", out["coverage_map"])
+	}
+	if dead, ok := out["dead_patterns"].([]any); !ok || len(dead) != 0 {
+		t.Fatalf("audit dead_patterns = %#v", out["dead_patterns"])
+	}
+
+	withoutMap, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "audit_coverage", Arguments: map[string]any{"repo_path": repo}})
+	if err != nil || withoutMap.IsError {
+		t.Fatalf("audit without map: err=%v result=%#v", err, withoutMap)
+	}
+	if _, present := structuredContent(t, withoutMap)["coverage_map"]; present {
+		t.Fatal("unrequested coverage_map must be omitted")
+	}
+
+	emptyRepo := initGitRepo(t)
+	git(t, emptyRepo, "commit", "--allow-empty", "-m", "initial")
+	emptyCS := dialMCP(t, broker.New(broker.Options{CanonPath: fixtureCanon(t, filepath.Base(emptyRepo))}))
+	emptyMap, err := emptyCS.CallTool(context.Background(), &mcp.CallToolParams{Name: "audit_coverage", Arguments: map[string]any{"repo_path": emptyRepo, "include_map": true}})
+	if err != nil || emptyMap.IsError {
+		t.Fatalf("empty audit map: err=%v result=%#v", err, emptyMap)
+	}
+	if groups, ok := structuredContent(t, emptyMap)["coverage_map"].([]any); !ok || len(groups) != 0 {
+		t.Fatalf("requested empty coverage_map = %#v, want []", structuredContent(t, emptyMap)["coverage_map"])
+	}
+
+	bad, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "audit_coverage", Arguments: map[string]any{"repo_path": t.TempDir()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bad.IsError {
+		t.Fatalf("invalid repo returned success: %#v", bad.StructuredContent)
+	}
+	envelope := structuredContent(t, bad)
+	inner := envelope["error"].(map[string]any)
+	if inner["code"] != errs.CodeUserError || len(envelope) != 1 {
+		t.Fatalf("audit error envelope = %#v", envelope)
 	}
 }
 
@@ -468,9 +558,9 @@ func TestNoJSONTagsOnProjectDTOs(t *testing.T) {
 		report.Coverage{}, report.FileCounts{}, report.QualityRef{}, report.Exclusion{},
 		report.DeadPattern{}, report.MapFile{}, report.MapGroup{}, report.AuditResponse{},
 		broker.CollectReviewResponse{}, broker.ReviewSummary{}, broker.ExcludedQuality{},
-		broker.TriageFindingOutput{}, broker.StartReviewResponse{}, broker.ListReviewsResponse{},
+		broker.TriageFindingOutput{}, broker.StartReviewResponse{}, broker.ListReviewsResponse{}, broker.AuditCoverageRequest{},
 		monitor.ReviewStatus{}, monitor.ReviewerInfo{}, monitor.QualityInfo{},
-		errs.Info{}, StartReviewInput{}, StartReviewOutput{}, CollectReviewInput{},
+		errs.Info{}, StartReviewInput{}, StartReviewOutput{}, CollectReviewInput{}, AuditCoverageInput{},
 		CollectReviewOutput{}, ToolErrorOutput{}, ErrorOutput{},
 	}
 	for _, v := range types {

@@ -248,7 +248,7 @@ var collectReviewOutputSchema = objSchema(
 
 var auditInputSchema = objSchema(
 	map[string]*jsonschema.Schema{
-		"repo_path":   strSchema(),
+		"repo_path":   stringDesc("path to the project repository whose full tracked tree will be audited; required."),
 		"rubric":      stringDesc("named rubric to audit; defaults to the project's `rubric`."),
 		"include_map": boolDesc("default false. when true also returns coverage_map: which project-local qualities reach each file, grouped by directory while preserving per-file differences."),
 	},

@@ -49,6 +49,7 @@ func newRootCommand() *cobra.Command {
 	root.PersistentFlags().BoolVar(&verbose, "verbose", false, "enable verbose stderr logging")
 	root.AddCommand(newServeCommand(&configPath, &verbose))
 	root.AddCommand(newReviewCommand(&configPath, &verbose))
+	root.AddCommand(newAuditCoverageCommand(&configPath, &verbose))
 	root.AddCommand(newRubricsCommand(&configPath, &verbose))
 	root.AddCommand(newMonitorCommand(&configPath))
 	root.AddCommand(build.NewVersionCmd("terminus"))

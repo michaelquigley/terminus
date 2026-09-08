@@ -40,35 +40,46 @@ type Rubric struct {
 }
 
 func LoadRubric(store *Store, project string, rubric string) (Rubric, error) {
+	r, _, err := loadRubric(store, project, rubric)
+	return r, err
+}
+
+// loadRubric derives the reported identity from the validated filename used
+// for the read. callers must pass the original request, not a normalized name.
+func loadRubric(store *Store, project string, rubric string) (Rubric, string, error) {
 	project = strings.TrimSpace(project)
 	if project == "" {
-		return Rubric{}, fmt.Errorf("project is required")
+		return Rubric{}, rubric, fmt.Errorf("project is required")
 	}
 	fileName, err := rubricFileName(rubric)
 	if err != nil {
-		return Rubric{}, err
+		return Rubric{}, rubric, err
 	}
+	name := strings.TrimSuffix(fileName, ".yaml")
 	path := filepath.Join(store.root, "projects", project, fileName)
 	if err := ensureContained(store.root, path); err != nil {
-		return Rubric{}, err
+		return Rubric{}, name, err
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return Rubric{}, fmt.Errorf("load rubric %q for project %q: %w", strings.TrimSuffix(fileName, ".yaml"), project, err)
+		return Rubric{}, name, fmt.Errorf("load rubric %q for project %q: %w", name, project, err)
 	}
-	return ParseRubric(raw)
+	r, err := ParseRubric(raw)
+	return r, name, err
 }
 
-func LoadProjectRubric(store *Store, repoPath string, rubric string) (Rubric, string, error) {
+// LoadProjectRubric returns the rubric, project identity, and normalized
+// rubric identity from the same load, validating project.repo before success.
+func LoadProjectRubric(store *Store, repoPath string, rubric string) (Rubric, string, string, error) {
 	project := ProjectIdentity(repoPath)
-	r, err := LoadRubric(store, project, rubric)
+	r, name, err := loadRubric(store, project, rubric)
 	if err != nil {
-		return Rubric{}, project, err
+		return Rubric{}, project, name, err
 	}
 	if r.Project.Repo != project {
-		return Rubric{}, project, fmt.Errorf("rubric project.repo mismatch for %q: expected %q, found %q", repoPath, project, r.Project.Repo)
+		return Rubric{}, project, name, fmt.Errorf("rubric project.repo mismatch for %q: expected %q, found %q", repoPath, project, r.Project.Repo)
 	}
-	return r, project, nil
+	return r, project, name, nil
 }
 
 // ListRubrics returns the rubric names available for a project, derived from the

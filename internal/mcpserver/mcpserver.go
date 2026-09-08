@@ -5,6 +5,7 @@ import (
 
 	"github.com/michaelquigley/push/build"
 	"github.com/michaelquigley/terminus/internal/broker"
+	"github.com/michaelquigley/terminus/internal/report"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -34,6 +35,12 @@ type StartReviewOutput struct {
 type CollectReviewInput struct {
 	Project  string
 	ReviewID string
+}
+
+type AuditCoverageInput struct {
+	RepoPath   string
+	Rubric     string
+	IncludeMap bool
 }
 
 type CollectReviewOutput struct {
@@ -70,9 +77,10 @@ func New(b *broker.Broker) (*mcp.Server, error) {
 }
 
 func RegisterTools(server *mcp.Server, b *broker.Broker) error {
+	destructive := false
 	if err := register(server, tool[StartReviewInput, StartReviewOutput]{
 		name:        "start_review",
-		description: "start one Terminus code review in the background. repo_path is required and drives project resolution from the canon. changeset_kind is working-tree, paths, or full; paths mode requires paths. rubric is the named rubric to select qualities from (defaults to the project's `rubric`); the available rubric names come from the canon's projects/<project>/ directory. rubric reviews report territory coverage for their starting-point files in status, result, and collect; coverage gaps do not change the findings verdict. qualities is an optional list of canon quality refs to review against directly, bypassing the rubric (an ad-hoc review); when set it takes precedence over rubric, and qualities_blocking makes them blocking (they are advisory by default). use the returned monitor_command while the review runs, then call collect_review with review_id.",
+		description: "start one Terminus code review in the background. repo_path is required and drives project resolution from the canon. changeset_kind is working-tree, paths, or full; paths mode requires paths. rubric is the named rubric to select qualities from (defaults to the project's `rubric`); the available rubric names come from the canon's projects/<project>/ directory. rubric reviews report territory coverage for their starting-point files in status, result, and collect; coverage gaps do not change the findings verdict. use audit_coverage to investigate full-tree gaps and optionally request its per-file map. qualities is an optional list of canon quality refs to review against directly, bypassing the rubric (an ad-hoc review); when set it takes precedence over rubric, and qualities_blocking makes them blocking (they are advisory by default). use the returned monitor_command while the review runs, then call collect_review with review_id.",
 		input:       startReviewInputSchema,
 		output:      startReviewOutputSchema,
 		run: func(ctx context.Context, in StartReviewInput) (StartReviewOutput, error) {
@@ -104,7 +112,7 @@ func RegisterTools(server *mcp.Server, b *broker.Broker) error {
 
 	if err := register(server, tool[CollectReviewInput, CollectReviewOutput]{
 		name:        "collect_review",
-		description: "collect a completed Terminus review, or list known reviews when review_id is omitted. if a review is still running this returns a conflict error; monitor instead of retrying immediately. findings are triage ordered with blocking findings first. rubric reviews include territory coverage for their starting-point files; coverage gaps can coexist with a clean findings verdict, while ad-hoc coverage is explicitly not assessed.",
+		description: "collect a completed Terminus review, or list known reviews when review_id is omitted. if a review is still running this returns a conflict error; monitor instead of retrying immediately. findings are triage ordered with blocking findings first. rubric reviews include territory coverage for their starting-point files; coverage gaps can coexist with a clean findings verdict, while ad-hoc coverage is explicitly not assessed. use audit_coverage to investigate full-tree gaps and optionally request its per-file map.",
 		input:       collectReviewInputSchema,
 		output:      collectReviewOutputSchema,
 		run: func(ctx context.Context, in CollectReviewInput) (CollectReviewOutput, error) {
@@ -123,6 +131,19 @@ func RegisterTools(server *mcp.Server, b *broker.Broker) error {
 				return CollectReviewOutput{}, err
 			}
 			return CollectReviewOutput{Review: &response}, nil
+		},
+	}); err != nil {
+		return err
+	}
+
+	if err := register(server, tool[AuditCoverageInput, report.AuditResponse]{
+		name:        "audit_coverage",
+		description: "audit one project rubric against its full tracked tree. repo_path is required; rubric defaults to `rubric`. returns uncovered files after coverage exclusions and territory patterns that match no tracked file. set include_map to true (default false) to also return a coverage map showing which project-local qualities reach each file, grouped by directory while preserving file-level differences. use the map to inspect uneven coverage even where files already match a quality. read-only: runs no reviewer, writes no review record, and makes no canon edits. use the evidence to propose canon changes, then rerun the audit to check their effect.",
+		annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: &destructive},
+		input:       auditInputSchema,
+		output:      auditResponseSchema,
+		run: func(ctx context.Context, in AuditCoverageInput) (report.AuditResponse, error) {
+			return b.AuditCoverage(ctx, broker.AuditCoverageRequest{RepoPath: in.RepoPath, Rubric: in.Rubric, IncludeMap: in.IncludeMap})
 		},
 	}); err != nil {
 		return err

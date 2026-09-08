@@ -6,24 +6,34 @@ import (
 	"strings"
 
 	"github.com/michaelquigley/terminus/internal/broker"
+	"github.com/michaelquigley/terminus/internal/report"
 )
 
 // printCoverageSummary renders the review's stored assessment without
 // recalculating territory reach. missing historical data stays distinct from
 // an explicit ad-hoc or assessed result.
 func printCoverageSummary(out io.Writer, result broker.CollectReviewResponse) {
+	fmt.Fprintln(out, coverageSummary(result.Coverage))
 	coverage := result.Coverage
-	if coverage == nil {
-		fmt.Fprintln(out, "coverage: unavailable")
+	if coverage == nil || !coverage.Assessed || coverage.FileCounts == nil || len(coverage.LocalQualities) == 0 {
 		return
+	}
+	if coverage.FileCounts.Uncovered > 0 {
+		for _, file := range coverage.UncoveredFiles {
+			fmt.Fprintf(out, "  %s\n", file)
+		}
+	}
+}
+
+func coverageSummary(coverage *report.Coverage) string {
+	if coverage == nil {
+		return "coverage: unavailable"
 	}
 	if !coverage.Assessed {
-		fmt.Fprintf(out, "coverage: not assessed — %s review\n", strings.ReplaceAll(coverage.Reason, "_", " "))
-		return
+		return fmt.Sprintf("coverage: not assessed — %s review", strings.ReplaceAll(coverage.Reason, "_", " "))
 	}
 	if coverage.FileCounts == nil {
-		fmt.Fprintln(out, "coverage: unavailable")
-		return
+		return "coverage: unavailable"
 	}
 	counts := coverage.FileCounts
 	if len(coverage.LocalQualities) == 0 {
@@ -34,26 +44,26 @@ func printCoverageSummary(out io.Writer, result broker.CollectReviewResponse) {
 		case counts.Excluded == counts.Total:
 			line += fmt.Sprintf("; all %d files excluded from gap reporting", counts.Total)
 		default:
-			line += fmt.Sprintf("; %d files uncovered", counts.Uncovered)
+			word := "files"
+			if counts.Uncovered == 1 {
+				word = "file"
+			}
+			line += fmt.Sprintf("; %d %s uncovered", counts.Uncovered, word)
 		}
-		fmt.Fprintln(out, line)
-		return
+		return line
 	}
 	switch {
 	case counts.Total == 0:
-		fmt.Fprintln(out, "coverage: no starting-point files")
+		return "coverage: no starting-point files"
 	case counts.Excluded == counts.Total:
-		fmt.Fprintf(out, "coverage: all %d files excluded from gap reporting\n", counts.Total)
+		return fmt.Sprintf("coverage: all %d files excluded from gap reporting", counts.Total)
 	case counts.Uncovered > 0:
 		word := "files"
 		if counts.Uncovered == 1 {
 			word = "file"
 		}
-		fmt.Fprintf(out, "coverage: %d %s has no matching project-local quality\n", counts.Uncovered, word)
-		for _, file := range coverage.UncoveredFiles {
-			fmt.Fprintf(out, "  %s\n", file)
-		}
+		return fmt.Sprintf("coverage: %d %s has no matching project-local quality", counts.Uncovered, word)
 	default:
-		fmt.Fprintf(out, "coverage: no uncovered files (%d excluded from gap reporting)\n", counts.Excluded)
+		return fmt.Sprintf("coverage: no uncovered files (%d excluded from gap reporting)", counts.Excluded)
 	}
 }

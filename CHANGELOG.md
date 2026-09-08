@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+FEATURE: Added the read-only `audit_coverage` MCP tool and `terminus audit-coverage` CLI command. They evaluate one rubric against the full tracked tree without running a reviewer or writing review artifacts, returning uncovered files, dead territory patterns, and an optional directory-grouped per-file coverage map.
+
 FEATURE: Rubric reviews now carry a territory-coverage assessment from dispatch through `status.json`, `result.json`, and `collect_review`, reporting uncovered starting-point files and `coverage_exclusions` without changing quality selection or the findings verdict. The foreground review command renders distinct empty, excluded, uncovered, gap-free, ad-hoc, and unavailable states.
 
 CHANGE: `status.json` now records the rubric qualities territory narrowing excluded from a review, written from the review's first status write, so a running review's coverage is visible before the verdict lands; the `monitor` command stays a lean status view and prints no quality detail.
