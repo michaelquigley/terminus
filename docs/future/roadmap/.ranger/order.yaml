@@ -1,5 +1,7 @@
 horizon:
 researching:
+  - report-territory-coverage-gaps.md
+  - territory-coverage-audit.md
   - multiple-review-passes.md
   - grouped-reviews.md
 building:
