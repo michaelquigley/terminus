@@ -2,7 +2,7 @@
 
 Terminus is a local MCP code-review broker. A caller points it at a project repo and a starting point — the dirty working tree, a set of paths, or the full tracked repo — and Terminus reviews the code against a central canon of qualities. The starting point is where the reviewer begins, not a fence: a finding may land on any file a change reaches. `clean` means the reviewer returned no blocking findings; advisory findings may still be present.
 
-v1 is intentionally the review spine only. It has no sessions, no rounds, no disposition capture, no survey, no sharpening, no canon promotion, and no autofix loop. Iteration is external: fix or reject what the review surfaced, then start a new review.
+Terminus provides the review broker and a read-only territory coverage audit. It has no sessions, no rounds, no disposition capture, no reviewer-driven survey, no sharpening, no canon promotion, and no autofix loop. Iteration is external: fix or reject what the review surfaced, then start a new review.
 
 ## Repos And Data
 
@@ -44,7 +44,7 @@ qualities:
 
 Refs are canon-relative, must not be absolute, and must not escape with `..`. Duplicate quality ids in a composed rubric fail before review.
 
-A project may carry multiple named rubrics, each a different subset of the canon. Rubric files live flat at `projects/<project>/<name>.yaml`, and the default is `rubric.yaml`. `terminus review --rubric architecture` (or the MCP `start_review` `rubric` field) selects a named rubric; an empty request resolves to the default. `terminus rubrics` lists the rubrics a project has. Blocking is per-rubric, so the same quality can block under one rubric and be advisory under another. Rubrics are independent, hand-authored lists; there is no include/compose mechanism yet.
+A project may carry multiple named rubrics, each a different subset of the canon. Rubric files live flat at `projects/<project>/<name>.yaml`, and the default is `rubric.yaml`. `terminus review --rubric architecture` (or the MCP `start_review` `rubric` field) selects a named rubric; an empty request resolves to the default. `terminus rubrics` lists the rubrics a project has. Blocking is per-rubric, so the same quality can block under one rubric and be advisory under another. Rubrics may also declare `coverage_exclusions`, territory patterns that suppress uncovered-file reporting without changing quality selection or findings. Rubrics are independent, hand-authored lists; there is no include/compose mechanism yet.
 
 ## Selection
 
@@ -97,7 +97,7 @@ terminus review --repo ../terminus --kind full
 terminus review --kind paths internal/canon cmd/terminus
 ```
 
-`--repo` defaults to `.`, `--kind` defaults to `working-tree`, `--rubric` defaults to `rubric` (the project's `rubric.yaml`), and path arguments are only valid with `--kind paths`. The command writes the same review artifacts as MCP review startup, waits for the reviewer to finish, then prints the verdict, finding counts, prompt path, findings log path, and a compact finding list. When territory narrowing excludes rubric-listed qualities it prints a one-line scope summary — `qualities: 2 of 5 in scope; 3 excluded by territory: ref1, ref2` — naming the excluded blocking qualities; when every rubric quality is excluded the line says so explicitly, so a `clean` verdict cannot read as full coverage. A `not_clean` result is still a successful command execution; process failure is reserved for operational errors.
+`--repo` defaults to `.`, `--kind` defaults to `working-tree`, `--rubric` defaults to `rubric` (the project's `rubric.yaml`), and path arguments are only valid with `--kind paths`. The command writes the same review artifacts as MCP review startup, waits for the reviewer to finish, then prints the verdict, a coverage summary, finding counts, prompt path, findings log path, and a compact finding list. Coverage distinguishes unavailable historical data, ad-hoc reviews, empty and all-excluded scopes, uncovered paths, and gap-free assessments. When territory narrowing excludes rubric-listed qualities it prints a one-line scope summary — `qualities: 2 of 5 in scope; 3 excluded by territory: ref1, ref2` — naming the excluded blocking qualities; when every rubric quality is excluded the line says so explicitly, so a `clean` verdict cannot read as full coverage. A `not_clean` result is still a successful command execution; process failure is reserved for operational errors.
 
 `--quality <ref>` (repeatable) runs an ad-hoc review against the given canon quality refs directly, bypassing rubric resolution — useful for trying a quality, or reviewing a project that has no rubric yet. It needs no rubric file and does not check `project.repo`; the project is still the repo basename. Ad-hoc qualities are advisory unless `--blocking` is passed; the recorded rubric is `(ad-hoc)`. `--quality` and `--rubric` cannot be combined.
 
@@ -105,10 +105,42 @@ terminus review --kind paths internal/canon cmd/terminus
 
 When `--kind` is left at its default and the working tree is clean, the command promotes the review to `full` and prints `working tree clean; reviewing full tracked repo`. This keeps a bare `terminus review` on a committed repo from selecting nothing and reporting a vacuous `clean`. An explicit `--kind working-tree` is always honored, even on a clean tree. The promotion is CLI-only; the MCP `start_review` tool reviews exactly the `changeset_kind` it is given.
 
+## Coverage Audit
+
+[Territory coverage](territory-coverage.md) documents default review reporting, project-local identity, exclusions, snapshot persistence, exact response members, and compatibility limits.
+
+`terminus audit-coverage --repo <path> --rubric <name> [--include-map]` audits one rubric against the full tracked tree. The defaults are `--repo .`, `--rubric rubric`, and no map. It reports the project, normalized rubric name, full scope, coverage summary, uncovered paths grouped by immediate parent, and dead territory patterns. `--include-map` adds every tracked file with its matching project-local quality refs and exclusion patterns, grouped by directory without hiding per-file differences.
+
+The audit is read-only: it runs no reviewer, allocates no review id, creates no review artifacts, and edits neither project nor canon. Gaps and dead patterns are successful diagnostic results. A territory-free project-local quality reaches every input file. The map is evidence for inspecting invariant reach, not a score; more matching qualities do not establish better coverage.
+
+```json
+{
+  "project": "example",
+  "rubric": "rubric",
+  "file_scope": "full",
+  "coverage": {
+    "assessed": true,
+    "file_counts": {"total": 2, "excluded": 0, "covered": 1, "uncovered": 1},
+    "local_qualities": [{"id": "config-validation", "ref": "projects/example/config-validation"}],
+    "uncovered_files": ["internal/gateway/handler.go"],
+    "exclusions": []
+  },
+  "dead_patterns": []
+}
+```
+
+`coverage_map` is omitted unless requested. With `include_map: true`, it is an array of `{directory, files}` groups; each entry carries an exact `file` path and `qualities` and `exclusion_patterns` arrays, including empty arrays.
+
+Audit scope follows Git's tracked-file view exactly. Untracked files do not appear. An unstaged deletion remains tracked and can keep a territory pattern live; a staged deletion is absent. An unstaged rename therefore leaves the old tracked path in the audit until the rename is staged.
+
 ## MCP Surface
 
 `start_review` takes `repo_path`, `changeset_kind` (`working-tree`, `paths`, or `full`), optional `paths`, and an optional `rubric` name (defaulting to `rubric`). It resolves the named project rubric, narrows the qualities, writes `_prompt.md`, starts the reviewer in the background, and returns a `review_id` plus a monitor command. The selected rubric is recorded in `status.json` and `result.json`. An optional `qualities` list reviews against those canon quality refs directly, bypassing the rubric (an ad-hoc review); it takes precedence over `rubric`, and `qualities_blocking` makes them blocking (advisory by default).
 
-`collect_review` returns a completed review when given `review_id`; if omitted, it lists known review runs. A running review returns `conflict`. The result carries `qualities_selected` and, when territory dropped rubric-listed qualities, `excluded_qualities` (id, ref, blocking), so an agent can see how much of the rubric the verdict actually covered.
+`collect_review` returns a completed review when given `review_id`; if omitted, it lists known review runs. A running review returns `conflict`. The result carries coverage from dispatch, including uncovered starting-point paths and applied exclusions, alongside `qualities_selected` and any `excluded_qualities` (id, ref, blocking). Coverage gaps do not change the findings verdict; collect guidance points agents to `audit_coverage` and its optional map for investigation. Ad-hoc reviews report coverage as not assessed, and pre-coverage historical results remain unavailable.
+
+`audit_coverage` takes required `repo_path`, optional `rubric` (default `rubric`), and optional `include_map` (default false). It returns the same assessed coverage object over the full tracked tree, dead patterns from every rubric tier, and the optional directory-grouped per-file map. Tool discovery exposes the map option and marks the operation read-only and explicitly non-destructive. Audit errors use the ordinary structured error envelope; gaps and dead patterns return successful results.
+
+All project payload binding uses `df/dd`, including tool arguments, results, errors, and persisted records. Project structs carry no `json` tags. A shared raw MCP adapter decodes arguments strictly, validates the explicit input schema before binding, and validates unbound success maps against the output schema. Malformed arguments, duplicate keys, unknown fields, and incorrect types produce `user_error` tool results. Classified service errors retain `IsError: true` and `{error: {code, message, details}}`; unexpected unclassified failures use the protocol-error path. The SDK owns the enclosing MCP protocol, while `dd` owns project payload names and omission rules. Structured and text success content use the same codec, including the opaque raw-reviewer JSON bridge.
 
 The CLI also exposes `terminus monitor --project <project> --wait <review_id>` for polling `status.json`.

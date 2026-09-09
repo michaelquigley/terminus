@@ -42,10 +42,10 @@ func New(code string, message string, err error, details map[string]any) *Error 
 }
 
 type Info struct {
-	Code    string         `json:"code"`
-	Message string         `json:"message"`
-	Details map[string]any `json:"details"`
-	At      string         `json:"at,omitempty"`
+	Code    string
+	Message string
+	Details map[string]any
+	At      string `dd:",+omitempty"`
 }
 
 func NewInfo(err error) *Info {

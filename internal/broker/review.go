@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -19,10 +18,12 @@ import (
 	"github.com/michaelquigley/df/dd"
 	"github.com/michaelquigley/terminus/internal/canon"
 	"github.com/michaelquigley/terminus/internal/changeset"
+	"github.com/michaelquigley/terminus/internal/coverage"
 	"github.com/michaelquigley/terminus/internal/errs"
 	"github.com/michaelquigley/terminus/internal/findings"
 	"github.com/michaelquigley/terminus/internal/monitor"
 	terminusprompt "github.com/michaelquigley/terminus/internal/prompt"
+	"github.com/michaelquigley/terminus/internal/report"
 	"github.com/michaelquigley/theharnessbody/record"
 	"github.com/michaelquigley/theharnessbody/reviewer"
 )
@@ -54,6 +55,7 @@ type reviewJob struct {
 	changeset    changeset.Changeset
 	selected     []canon.Selected
 	excluded     []canon.Selected
+	coverage     *report.Coverage
 	reviewer     reviewer.Reviewer
 	reviewerName string
 	done         chan struct{}
@@ -128,11 +130,7 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 		}
 		rubric = canon.Rubric{Project: canon.ProjectInfo{Repo: project}, Qualities: entries}
 	} else {
-		rubricName = strings.TrimSpace(req.Rubric)
-		if rubricName == "" {
-			rubricName = canon.DefaultRubric
-		}
-		rubric, project, err = canon.LoadProjectRubric(store, repoPath, rubricName)
+		rubric, project, rubricName, err = canon.LoadProjectRubric(store, repoPath, req.Rubric)
 		if err != nil {
 			return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "load project rubric", err, map[string]any{"repo_path": repoPath, "rubric": rubricName})
 		}
@@ -146,12 +144,21 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 		return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "compose rubric", err, nil)
 	}
 	var selected, excluded []canon.Selected
+	var coverageReport *report.Coverage
 	if len(req.Qualities) > 0 {
 		// an explicitly named quality bypasses territory narrowing: a human
 		// naming it by hand has already made the judgment the filter automates.
 		selected = composed
 	} else {
 		selected, excluded = canon.Narrow(composed, cs.Files)
+		assessment, err := coverage.Assess(ctx, project, composed, cs.Files, rubric.CoverageExclusions, coverage.Options{})
+		if err != nil {
+			return nil, "", StartReviewResponse{}, errs.New(errs.CodeUserError, "assess coverage", err, nil)
+		}
+		coverageReport = report.CoverageFrom(assessment)
+	}
+	if coverageReport == nil {
+		coverageReport = report.CoverageFrom(coverage.Assessment{Assessed: false, Reason: "ad_hoc"})
 	}
 
 	id, err := newReviewID()
@@ -187,6 +194,7 @@ func (b *Broker) prepareReview(ctx context.Context, req StartReviewRequest) (*re
 		changeset:    cs,
 		selected:     cloneSelected(selected),
 		excluded:     cloneSelected(excluded),
+		coverage:     report.CloneCoverage(coverageReport),
 		reviewer:     b.options.Reviewer,
 		reviewerName: b.options.ReviewerInfo.Name,
 		done:         make(chan struct{}),
@@ -272,7 +280,8 @@ func (b *Broker) execute(ctx context.Context, job *reviewJob, promptText string)
 		ReviewerName:      job.reviewerName,
 		Raw:               append(json.RawMessage(nil), resp.Raw...),
 		Findings:          triage,
-		Guidance:          triageGuidance(triage),
+		Coverage:          report.CloneCoverage(job.coverage),
+		Guidance:          reviewGuidance(triage, job.coverage),
 	}
 	if len(triage) > 0 {
 		next := triage[0]
@@ -376,7 +385,7 @@ func (b *Broker) CollectReview(ctx context.Context, req CollectReviewRequest) (C
 		return CollectReviewResponse{}, errs.New(errs.CodeNotFound, "review result not found", err, nil)
 	}
 	var stored reviewResultFile
-	if err := dd.BindJSON(&stored, raw, ddJSONOpts); err != nil {
+	if err := report.BindJSON(&stored, raw); err != nil {
 		return CollectReviewResponse{}, errs.New(errs.CodeInternalError, "parse review result", err, nil)
 	}
 	return collectFromStored(stored), nil
@@ -457,6 +466,7 @@ func (j *reviewJob) status(state string, logPath string, errInfo *errs.Info) mon
 		Files:             append([]string(nil), j.changeset.Files...),
 		Qualities:         monitorQualities(j.selected),
 		ExcludedQualities: monitorQualities(j.excluded),
+		Coverage:          report.CloneCoverage(j.coverage),
 	}
 	if state != monitor.StateRunning {
 		status.CompletedAt = status.UpdatedAt
@@ -465,7 +475,7 @@ func (j *reviewJob) status(state string, logPath string, errInfo *errs.Info) mon
 }
 
 func monitorQualities(selected []canon.Selected) []monitor.QualityInfo {
-	out := make([]monitor.QualityInfo, 0, len(selected))
+	out := []monitor.QualityInfo(nil)
 	for _, s := range selected {
 		out = append(out, monitor.QualityInfo{
 			ID:       s.Quality.Head.ID,
@@ -477,7 +487,7 @@ func monitorQualities(selected []canon.Selected) []monitor.QualityInfo {
 }
 
 func excludedQualityInfos(excluded []canon.Selected) []ExcludedQuality {
-	out := make([]ExcludedQuality, 0, len(excluded))
+	out := []ExcludedQuality(nil)
 	for _, s := range excluded {
 		out = append(out, ExcludedQuality{
 			ID:       s.Quality.Head.ID,
@@ -524,6 +534,20 @@ func orderTriage(classified []findings.Classified) []TriageFindingOutput {
 	return classifiedToTriage(ordered)
 }
 
+func reviewGuidance(findings []TriageFindingOutput, coverageReport *report.Coverage) string {
+	guidance := triageGuidance(findings)
+	if coverageReport == nil {
+		return guidance + " coverage is unavailable for this historical review."
+	}
+	if !coverageReport.Assessed {
+		return guidance + " coverage was not assessed because this is an ad-hoc review."
+	}
+	if coverageReport.FileCounts == nil || coverageReport.FileCounts.Uncovered == 0 {
+		return guidance + " coverage found no uncovered starting-point files."
+	}
+	return fmt.Sprintf("%s coverage found %d uncovered starting-point file(s); clean concerns findings, not territory coverage. use audit_coverage, optionally with its coverage map, to investigate.", guidance, coverageReport.FileCounts.Uncovered)
+}
+
 func triageGuidance(findings []TriageFindingOutput) string {
 	if len(findings) == 0 {
 		return "no findings were returned. summarize that the review is clean, then decide whether another fresh review is needed."
@@ -547,51 +571,20 @@ func writeResult(path string, result CollectReviewResponse) error {
 		ReviewerName:      result.ReviewerName,
 		Raw:               append(json.RawMessage(nil), result.Raw...),
 		Findings:          append([]TriageFindingOutput(nil), result.Findings...),
+		Coverage:          report.CloneCoverage(result.Coverage),
 	}
 	return writeJSONAtomic(path, file)
 }
 
-// rawMessageConverter passes a json.RawMessage field (the reviewer's raw output)
-// through dd as embedded JSON; dd's generic unbind would otherwise render the
-// underlying []byte as a number array.
-type rawMessageConverter struct{}
-
-func (rawMessageConverter) ToRaw(value interface{}) (interface{}, error) {
-	rm, ok := value.(json.RawMessage)
-	if !ok || len(rm) == 0 {
-		return nil, nil
-	}
-	var v any
-	if err := json.Unmarshal(rm, &v); err != nil {
-		return nil, err
-	}
-	return v, nil
-}
-
-func (rawMessageConverter) FromRaw(raw interface{}) (interface{}, error) {
-	if raw == nil {
-		return json.RawMessage(nil), nil
-	}
-	b, err := json.Marshal(raw)
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(b), nil
-}
-
-// ddJSONOpts binds review artifacts through df/dd while passing the raw reviewer
-// output through unchanged.
-var ddJSONOpts = &dd.Options{
-	Converters: map[reflect.Type]dd.Converter{
-		reflect.TypeOf(json.RawMessage{}): rawMessageConverter{},
-	},
-}
+// the raw-reviewer-JSON converter and the dd options that carry it now live
+// in the shared report codec, which disk persistence and the MCP adapter both
+// bind through so they agree on raw reviewer content.
 
 func writeJSONAtomic(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	raw, err := dd.UnbindJSON(v, ddJSONOpts)
+	raw, err := report.UnbindJSON(v)
 	if err != nil {
 		return err
 	}
@@ -651,7 +644,8 @@ func collectFromStored(stored reviewResultFile) CollectReviewResponse {
 		ReviewerName:      stored.ReviewerName,
 		Raw:               append(json.RawMessage(nil), stored.Raw...),
 		Findings:          append([]TriageFindingOutput(nil), stored.Findings...),
-		Guidance:          triageGuidance(stored.Findings),
+		Coverage:          report.CloneCoverage(stored.Coverage),
+		Guidance:          reviewGuidance(stored.Findings, stored.Coverage),
 	}
 	if len(resp.Findings) > 0 {
 		next := resp.Findings[0]
@@ -665,6 +659,7 @@ func cloneCollectReviewResponse(in CollectReviewResponse) CollectReviewResponse 
 	out.Raw = append(json.RawMessage(nil), in.Raw...)
 	out.Findings = append([]TriageFindingOutput(nil), in.Findings...)
 	out.ExcludedQualities = append([]ExcludedQuality(nil), in.ExcludedQualities...)
+	out.Coverage = report.CloneCoverage(in.Coverage)
 	if in.NextFinding != nil {
 		next := *in.NextFinding
 		out.NextFinding = &next

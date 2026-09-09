@@ -49,6 +49,7 @@ func newRootCommand() *cobra.Command {
 	root.PersistentFlags().BoolVar(&verbose, "verbose", false, "enable verbose stderr logging")
 	root.AddCommand(newServeCommand(&configPath, &verbose))
 	root.AddCommand(newReviewCommand(&configPath, &verbose))
+	root.AddCommand(newAuditCoverageCommand(&configPath, &verbose))
 	root.AddCommand(newRubricsCommand(&configPath, &verbose))
 	root.AddCommand(newMonitorCommand(&configPath))
 	root.AddCommand(build.NewVersionCmd("terminus"))
@@ -80,7 +81,10 @@ func runServer(cmd *cobra.Command, configPath string, verbose bool) error {
 	if err != nil {
 		return err
 	}
-	server := mcpserver.New(b)
+	server, err := mcpserver.New(b)
+	if err != nil {
+		return err
+	}
 	err = server.Run(cmd.Context(), &mcp.StdioTransport{})
 	if errors.Is(err, context.Canceled) {
 		return nil

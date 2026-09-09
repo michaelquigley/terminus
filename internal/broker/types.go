@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/michaelquigley/terminus/internal/findings"
+	"github.com/michaelquigley/terminus/internal/report"
 	"github.com/michaelquigley/theharnessbody/reviewer"
 )
 
@@ -50,75 +51,83 @@ type CollectReviewRequest struct {
 }
 
 type ListReviewsResponse struct {
-	Reviews []ReviewSummary `json:"reviews"`
+	Reviews []ReviewSummary
 }
 
 type ReviewSummary struct {
-	ReviewID      string `json:"review_id"`
-	Project       string `json:"project"`
-	Rubric        string `json:"rubric,omitempty"`
-	State         string `json:"state"`
-	ChangesetKind string `json:"changeset_kind"`
-	StartedAt     string `json:"started_at"`
-	CompletedAt   string `json:"completed_at,omitempty"`
-	StatusPath    string `json:"status_path"`
-	LogPath       string `json:"log_path,omitempty"`
+	ReviewID      string
+	Project       string
+	Rubric        string `dd:",+omitempty"`
+	State         string
+	ChangesetKind string
+	StartedAt     string
+	CompletedAt   string `dd:",+omitempty"`
+	StatusPath    string
+	LogPath       string `dd:",+omitempty"`
 }
 
 type CollectReviewResponse struct {
-	ReviewID          string                `json:"review_id"`
-	Project           string                `json:"project"`
-	Rubric            string                `json:"rubric,omitempty"`
-	QualitiesSelected int                   `json:"qualities_selected"`
-	ExcludedQualities []ExcludedQuality     `json:"excluded_qualities,omitempty"`
-	State             string                `json:"state"`
-	Verdict           string                `json:"verdict"`
-	Clean             bool                  `json:"clean"`
-	Summary           string                `json:"summary"`
-	LogPath           string                `json:"log_path"`
-	PromptPath        string                `json:"prompt_path"`
-	ReviewerName      string                `json:"reviewer_name"`
-	Raw               json.RawMessage       `json:"raw"`
-	Findings          []TriageFindingOutput `json:"findings"`
-	NextFinding       *TriageFindingOutput  `json:"next_finding,omitempty"`
-	Guidance          string                `json:"guidance"`
+	ReviewID          string
+	Project           string
+	Rubric            string `dd:",+omitempty"`
+	QualitiesSelected int
+	ExcludedQualities []ExcludedQuality `dd:",+omitempty"`
+	State             string
+	Verdict           string
+	Clean             bool
+	Summary           string
+	LogPath           string
+	PromptPath        string
+	ReviewerName      string
+	Raw               json.RawMessage
+	Findings          []TriageFindingOutput
+	NextFinding       *TriageFindingOutput
+	Guidance          string
+	// Coverage is the territory-coverage assessment computed before the
+	// reviewer starts, carried unchanged through status, result, and collect.
+	// new reviews always set it: rubric reviews carry an assessed object,
+	// ad-hoc reviews carry assessed:false with reason ad_hoc. nil only on
+	// historical results recorded before coverage reporting existed, which
+	// means coverage is unavailable for that review.
+	Coverage *report.Coverage
 }
 
 // ExcludedQuality records a rubric-listed quality that territory narrowing
 // dropped from a review, so a verdict stays honest about how much of the
 // rubric it actually covered.
 type ExcludedQuality struct {
-	ID       string `json:"id"`
-	Ref      string `json:"ref"`
-	Blocking bool   `json:"blocking"`
+	ID       string
+	Ref      string
+	Blocking bool
 }
 
 type TriageFindingOutput struct {
-	ID         string  `json:"id"`
-	Quality    string  `json:"quality"`
-	File       string  `json:"file"`
-	Lines      string  `json:"lines"`
-	Claim      string  `json:"claim"`
-	Rationale  string  `json:"rationale"`
-	Suggestion *string `json:"suggestion,omitempty"`
-	Blocking   bool    `json:"blocking"`
+	ID         string
+	Quality    string
+	File       string
+	Lines      string
+	Claim      string
+	Rationale  string
+	Suggestion *string
+	Blocking   bool
 }
 
 type reviewResultFile struct {
-	ReviewID          string                `json:"review_id"`
-	Project           string                `json:"project"`
-	Rubric            string                `json:"rubric,omitempty"`
-	QualitiesSelected int                   `json:"qualities_selected"`
-	ExcludedQualities []ExcludedQuality     `json:"excluded_qualities,omitempty"`
-	State             string                `json:"state"`
-	Verdict           string                `json:"verdict"`
-	Clean             bool                  `json:"clean"`
-	Summary           string                `json:"summary"`
-	LogPath           string                `json:"log_path"`
-	PromptPath        string                `json:"prompt_path"`
-	ReviewerName      string                `json:"reviewer_name"`
-	Raw               json.RawMessage       `json:"raw"`
-	Findings          []TriageFindingOutput `json:"findings"`
+	ReviewID          string
+	Project           string
+	Rubric            string `dd:",+omitempty"`
+	QualitiesSelected int
+	ExcludedQualities []ExcludedQuality `dd:",+omitempty"`
+	State             string
+	Verdict           string
+	Clean             bool
+	Summary           string
+	LogPath           string
+	PromptPath        string
+	ReviewerName      string
+	Raw               json.RawMessage
+	Findings          []TriageFindingOutput
+	Coverage          *report.Coverage
 }
 
 func classifiedToTriage(classified []findings.Classified) []TriageFindingOutput {

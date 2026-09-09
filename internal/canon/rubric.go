@@ -28,41 +28,58 @@ type RubricEntry struct {
 }
 
 type Rubric struct {
-	Project   ProjectInfo    `dd:"project"`
-	Qualities []RubricEntry  `dd:"qualities,+required"`
-	Extra     map[string]any `dd:",+extra"`
+	Project   ProjectInfo   `dd:"project"`
+	Qualities []RubricEntry `dd:"qualities,+required"`
+	// CoverageExclusions are territory globs whose matching files are
+	// suppressed from uncovered-file complaints. they do not remove files
+	// from the changeset or affect quality selection. declared spelling is
+	// preserved for reporting; matching normalizes. absent or empty means no
+	// exceptions. the dd key is the snake_case default, coverage_exclusions.
+	CoverageExclusions []string
+	Extra              map[string]any `dd:",+extra"`
 }
 
 func LoadRubric(store *Store, project string, rubric string) (Rubric, error) {
+	r, _, err := loadRubric(store, project, rubric)
+	return r, err
+}
+
+// loadRubric derives the reported identity from the validated filename used
+// for the read. callers must pass the original request, not a normalized name.
+func loadRubric(store *Store, project string, rubric string) (Rubric, string, error) {
 	project = strings.TrimSpace(project)
 	if project == "" {
-		return Rubric{}, fmt.Errorf("project is required")
+		return Rubric{}, rubric, fmt.Errorf("project is required")
 	}
 	fileName, err := rubricFileName(rubric)
 	if err != nil {
-		return Rubric{}, err
+		return Rubric{}, rubric, err
 	}
+	name := strings.TrimSuffix(fileName, ".yaml")
 	path := filepath.Join(store.root, "projects", project, fileName)
 	if err := ensureContained(store.root, path); err != nil {
-		return Rubric{}, err
+		return Rubric{}, name, err
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return Rubric{}, fmt.Errorf("load rubric %q for project %q: %w", strings.TrimSuffix(fileName, ".yaml"), project, err)
+		return Rubric{}, name, fmt.Errorf("load rubric %q for project %q: %w", name, project, err)
 	}
-	return ParseRubric(raw)
+	r, err := ParseRubric(raw)
+	return r, name, err
 }
 
-func LoadProjectRubric(store *Store, repoPath string, rubric string) (Rubric, string, error) {
+// LoadProjectRubric returns the rubric, project identity, and normalized
+// rubric identity from the same load, validating project.repo before success.
+func LoadProjectRubric(store *Store, repoPath string, rubric string) (Rubric, string, string, error) {
 	project := ProjectIdentity(repoPath)
-	r, err := LoadRubric(store, project, rubric)
+	r, name, err := loadRubric(store, project, rubric)
 	if err != nil {
-		return Rubric{}, project, err
+		return Rubric{}, project, name, err
 	}
 	if r.Project.Repo != project {
-		return Rubric{}, project, fmt.Errorf("rubric project.repo mismatch for %q: expected %q, found %q", repoPath, project, r.Project.Repo)
+		return Rubric{}, project, name, fmt.Errorf("rubric project.repo mismatch for %q: expected %q, found %q", repoPath, project, r.Project.Repo)
 	}
-	return r, project, nil
+	return r, project, name, nil
 }
 
 // ListRubrics returns the rubric names available for a project, derived from the
@@ -93,7 +110,7 @@ func ListRubrics(store *Store, project string) ([]string, error) {
 }
 
 // rubricFileName normalizes a requested rubric name to a single-segment file
-// name. An empty request resolves to the default rubric; names that escape the
+// name. an empty request resolves to the default rubric; names that escape the
 // project directory are rejected.
 func rubricFileName(rubric string) (string, error) {
 	rubric = strings.TrimSpace(rubric)
@@ -127,6 +144,11 @@ func ParseRubric(raw []byte) (Rubric, error) {
 			return Rubric{}, fmt.Errorf("rubric qualities[%d]: %w", i, err)
 		}
 		r.Qualities[i].Ref = clean
+	}
+	for i, pattern := range r.CoverageExclusions {
+		if err := ValidateTerritory(pattern); err != nil {
+			return Rubric{}, fmt.Errorf("rubric coverage_exclusions[%d] %q: %w", i, pattern, err)
+		}
 	}
 	return r, nil
 }

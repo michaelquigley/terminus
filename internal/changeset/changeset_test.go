@@ -63,6 +63,55 @@ func TestPathsAndFull(t *testing.T) {
 	}
 }
 
+func TestGitStagingMatrix(t *testing.T) {
+	tests := []struct {
+		name        string
+		mutate      func(*testing.T, string)
+		workingWant []string
+		fullWant    []string
+	}{
+		{name: "untracked add", mutate: func(t *testing.T, repo string) { writeFile(t, filepath.Join(repo, "new.go"), "package main\n") }, workingWant: []string{"new.go"}, fullWant: []string{"old.go"}},
+		{name: "staged add", mutate: func(t *testing.T, repo string) {
+			writeFile(t, filepath.Join(repo, "new.go"), "package main\n")
+			git(t, repo, "add", "new.go")
+		}, workingWant: []string{"new.go"}, fullWant: []string{"new.go", "old.go"}},
+		{name: "unstaged delete", mutate: func(t *testing.T, repo string) {
+			if err := os.Remove(filepath.Join(repo, "old.go")); err != nil {
+				t.Fatal(err)
+			}
+		}, workingWant: []string{"old.go"}, fullWant: []string{"old.go"}},
+		{name: "staged delete", mutate: func(t *testing.T, repo string) { git(t, repo, "rm", "old.go") }, workingWant: []string{"old.go"}, fullWant: []string{}},
+		{name: "unstaged rename", mutate: func(t *testing.T, repo string) {
+			if err := os.Rename(filepath.Join(repo, "old.go"), filepath.Join(repo, "new.go")); err != nil {
+				t.Fatal(err)
+			}
+		}, workingWant: []string{"new.go", "old.go"}, fullWant: []string{"old.go"}},
+		{name: "staged rename", mutate: func(t *testing.T, repo string) { git(t, repo, "mv", "old.go", "new.go") }, workingWant: []string{"new.go"}, fullWant: []string{"new.go"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repo := initGitRepo(t)
+			writeFile(t, filepath.Join(repo, "old.go"), "package main\n")
+			git(t, repo, "add", ".")
+			git(t, repo, "commit", "-m", "initial")
+			test.mutate(t, repo)
+			working, err := WorkingTree(context.Background(), repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			full, err := Full(context.Background(), repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			slices.Sort(working.Files)
+			slices.Sort(full.Files)
+			if !slices.Equal(working.Files, test.workingWant) || !slices.Equal(full.Files, test.fullWant) {
+				t.Fatalf("working=%#v full=%#v; want working=%#v full=%#v", working.Files, full.Files, test.workingWant, test.fullWant)
+			}
+		})
+	}
+}
+
 func initGitRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -74,7 +123,7 @@ func initGitRepo(t *testing.T) string {
 
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", append([]string{"-c", "commit.gpgsign=false"}, args...)...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {

@@ -16,23 +16,23 @@ import (
 var schemaFS embed.FS
 
 type Output struct {
-	Summary  string    `json:"summary"`
-	Findings []Finding `json:"findings"`
+	Summary  string
+	Findings []Finding
 }
 
 type Finding struct {
-	ID         string  `json:"id"`
-	Quality    string  `json:"quality"`
-	File       string  `json:"file"`
-	Lines      string  `json:"lines"`
-	Claim      string  `json:"claim"`
-	Rationale  string  `json:"rationale"`
-	Suggestion *string `json:"suggestion" dd:",+nullable"`
+	ID         string
+	Quality    string
+	File       string
+	Lines      string
+	Claim      string
+	Rationale  string
+	Suggestion *string `dd:",+nullable"`
 }
 
 type Classified struct {
-	Finding  Finding `json:"finding"`
-	Blocking bool    `json:"blocking"`
+	Finding  Finding
+	Blocking bool
 }
 
 func Schema() json.RawMessage {
