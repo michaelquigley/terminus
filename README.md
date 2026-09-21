@@ -48,7 +48,7 @@ A review picks a **rubric** (which qualities apply), narrows it to the files in 
 Terminus is a Go program; build it with the toolchain or grab the binary from CI.
 
 ```bash
-make build          # go install ./cmd/terminus
+make build          # go install ./...
 ```
 
 Write a `terminus.yaml` (see [`examples/`](examples/)). The only required field is `canon_path` — Terminus will not guess where your canon lives.
@@ -154,7 +154,7 @@ This is the v1 review **spine**, deliberately minimal: no sessions, no rounds, n
 ## Building & development
 
 ```bash
-make build    # go install ./cmd/terminus
+make build    # go install ./...
 make test     # go test ./... && go vet ./...
 ```
 
